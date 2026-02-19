@@ -135,7 +135,7 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
 
 // ─── Massachusetts plans ────────────────────────────────────────────────────
 
-function scoreMassachusettsPlans(goals: Goals, age: number): PlanSummary[] {
+function scoreMassachusettsPlans(goals: Goals, age: number, birthYear?: number): PlanSummary[] {
   const hasAnyGoal = Object.values(goals).some(Boolean)
   const af = ageFactor(age)
 
@@ -167,6 +167,9 @@ function scoreMassachusettsPlans(goals: Goals, age: number): PlanSummary[] {
     raw['ma-core'] += 0; raw['advantage'] += 0
   }
 
+  // MA Supplement 1 requires Medicare eligibility before Jan 1, 2020 (birth year ≤ 1954)
+  const supplement1Eligible = birthYear === undefined || birthYear < 1955
+
   return ([
     {
       id: 'ma-supplement1a' as const,
@@ -180,10 +183,10 @@ function scoreMassachusettsPlans(goals: Goals, age: number): PlanSummary[] {
       bestFor: 'Comprehensive MA coverage — available to all enrollees',
       score: raw['ma-supplement1a'],
     },
-    {
+    ...(supplement1Eligible ? [{
       id: 'ma-supplement1' as const,
       name: 'MA Supplement 1',
-      type: 'Medigap',
+      type: 'Medigap' as const,
       premiumRange: `$140–$250/mo${af}`,
       maxAnnualOOP: 'Covers Part B deductible — most comprehensive',
       anyDoctor: true,
@@ -191,7 +194,7 @@ function scoreMassachusettsPlans(goals: Goals, age: number): PlanSummary[] {
       rxIncluded: false,
       bestFor: 'Most complete coverage — pre-Jan 2020 enrollees only',
       score: raw['ma-supplement1'],
-    },
+    }] : []),
     {
       id: 'ma-core' as const,
       name: 'MA Core Plan',
@@ -324,8 +327,8 @@ function scoreWisconsinPlans(goals: Goals, age: number): PlanSummary[] {
 
 // ─── Public entry point ──────────────────────────────────────────────────────
 
-export function getPlansForState(goals: Goals, age: number, state: string | null): PlanSummary[] {
-  if (state === 'MA') return scoreMassachusettsPlans(goals, age)
+export function getPlansForState(goals: Goals, age: number, state: string | null, birthYear?: number): PlanSummary[] {
+  if (state === 'MA') return scoreMassachusettsPlans(goals, age, birthYear)
   if (state === 'MN') return scoreMinnesotaPlans(goals, age)
   if (state === 'WI') return scoreWisconsinPlans(goals, age)
   return scoreStandardPlans(goals, age)

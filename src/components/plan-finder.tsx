@@ -9,6 +9,7 @@ interface Props {
   age?: number | null
   zipCode?: string | null
   goals: Goals
+  birthYear?: number | null
 }
 
 function Check({ yes }: { yes: boolean }) {
@@ -71,12 +72,12 @@ function StateNotice({ state }: { state: string }) {
   return null
 }
 
-export default function PlanFinder({ age, zipCode, goals }: Props) {
+export default function PlanFinder({ age, zipCode, goals, birthYear }: Props) {
   const state = zipCode ? zipToState(zipCode) : null
   const stateName = state ? getStateName(state) : null
   const effectiveAge = age ?? 65
 
-  const plans = getPlansForState(goals, effectiveAge, state)
+  const plans = getPlansForState(goals, effectiveAge, state, birthYear ?? undefined)
   const hasGoals = Object.values(goals).some(Boolean)
   const topScore = plans[0].score
   const topPlan = plans[0]

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const FILING_STATUSES = [
@@ -30,6 +31,7 @@ const INSURANCE_GOALS = [
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Enter a valid email address').or(z.literal('')),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid US zip code'),
   filingStatus: z.string().min(1, 'Please select a filing status'),
@@ -38,6 +40,8 @@ const formSchema = z.object({
   goalMinPremium: z.boolean(),
   goalMinTotalCost: z.boolean(),
   goalTravelCoverage: z.boolean(),
+  enrolledMedicare: z.boolean(),
+  collectingSS: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -50,9 +54,10 @@ export default function AccountPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: '', dateOfBirth: '', zipCode: '', filingStatus: '',
+      name: '', email: '', dateOfBirth: '', zipCode: '', filingStatus: '',
       goalCatastrophicRisk: false, goalDoctorFreedom: false,
       goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
+      enrolledMedicare: false, collectingSS: false,
     },
   })
 
@@ -64,6 +69,7 @@ export default function AccountPage() {
           setUserId(user.id)
           form.reset({
             name: user.name,
+            email: user.email ?? '',
             dateOfBirth: user.dateOfBirth,
             zipCode: user.zipCode,
             filingStatus: user.filingStatus ?? '',
@@ -72,6 +78,8 @@ export default function AccountPage() {
             goalMinPremium: user.goalMinPremium ?? false,
             goalMinTotalCost: user.goalMinTotalCost ?? false,
             goalTravelCoverage: user.goalTravelCoverage ?? false,
+            enrolledMedicare: user.enrolledMedicare ?? false,
+            collectingSS: user.collectingSS ?? false,
           })
         }
         setLoading(false)
@@ -121,6 +129,14 @@ export default function AccountPage() {
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -182,6 +198,70 @@ export default function AccountPage() {
                       )}
                     />
                   ))}
+                </div>
+              </div>
+
+              {/* Medicare / SS enrollment status */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium leading-none">Enrollment Status</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Helps us tailor enrollment timing advice and plan recommendations.
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4 space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="enrolledMedicare"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-normal">Are you currently enrolled in Medicare?</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value ? 'yes' : 'no'}
+                            onValueChange={(v) => field.onChange(v === 'yes')}
+                            className="flex gap-6 mt-1"
+                          >
+                            <FormItem className="flex items-center gap-2 space-y-0">
+                              <FormControl><RadioGroupItem value="yes" /></FormControl>
+                              <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center gap-2 space-y-0">
+                              <FormControl><RadioGroupItem value="no" /></FormControl>
+                              <FormLabel className="font-normal cursor-pointer">No</FormLabel>
+                            </FormItem>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="collectingSS"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-normal">Are you currently collecting Social Security benefits?</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value ? 'yes' : 'no'}
+                            onValueChange={(v) => field.onChange(v === 'yes')}
+                            className="flex gap-6 mt-1"
+                          >
+                            <FormItem className="flex items-center gap-2 space-y-0">
+                              <FormControl><RadioGroupItem value="yes" /></FormControl>
+                              <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center gap-2 space-y-0">
+                              <FormControl><RadioGroupItem value="no" /></FormControl>
+                              <FormLabel className="font-normal cursor-pointer">No</FormLabel>
+                            </FormItem>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
 

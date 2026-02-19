@@ -26,10 +26,14 @@ export default async function MedicarePage() {
   const [user] = await db.select().from(users).orderBy(desc(users.id)).limit(1)
   const dob = user?.dateOfBirth ?? null
   const iep = dob ? getIEP(dob) : null
+  const enrolledMedicare = user?.enrolledMedicare ?? false
+  const collectingSS = user?.collectingSS ?? false
 
   const age = dob
     ? Math.floor((Date.now() - new Date(dob + 'T00:00:00').getTime()) / (365.25 * 24 * 60 * 60 * 1000))
     : null
+
+  const birthYear = dob ? new Date(dob + 'T00:00:00').getFullYear() : null
 
   const goals = {
     catastrophicRisk: user?.goalCatastrophicRisk ?? false,
@@ -48,7 +52,16 @@ export default async function MedicarePage() {
         Medicare is federal health insurance for people 65 and older. Understanding when and how to enroll — and which supplemental coverage to add — can save you thousands per year.
       </p>
 
-      {iep && (
+      {enrolledMedicare ? (
+        <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-8">
+          <p className="text-sm font-semibold text-green-800 dark:text-green-400">✓ You are enrolled in Medicare</p>
+          <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+            Focus on choosing the right supplemental coverage below. During your Medigap Open Enrollment window
+            (first 6 months of Part B), insurers cannot deny coverage or charge more based on health.
+            {collectingSS && ' Since you\u2019re collecting Social Security, you were auto-enrolled in Parts A and B.'}
+          </p>
+        </div>
+      ) : iep ? (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 mb-8">
           <p className="text-sm font-semibold text-primary">Your Initial Enrollment Period (IEP)</p>
           <p className="text-sm text-muted-foreground mt-1">
@@ -59,7 +72,7 @@ export default async function MedicarePage() {
             Enroll in the first 3 months for coverage to begin on your birthday. Waiting until months 4–7 may delay your start date.
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Enrollment basics */}
       <div className="grid gap-6 md:grid-cols-2 mb-10">
@@ -161,7 +174,7 @@ export default async function MedicarePage() {
       <p className="text-muted-foreground mb-4">
         Recommendations based on your age, ZIP code, and supplemental insurance priorities from your account.
       </p>
-      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} />
+      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} />
 
     </main>
   )

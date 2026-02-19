@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const FILING_STATUSES = [
@@ -38,6 +39,8 @@ const formSchema = z.object({
   goalMinPremium: z.boolean(),
   goalMinTotalCost: z.boolean(),
   goalTravelCoverage: z.boolean(),
+  enrolledMedicare: z.boolean(),
+  collectingSS: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -51,6 +54,7 @@ export default function Home() {
       name: '', dateOfBirth: '', zipCode: '', filingStatus: '',
       goalCatastrophicRisk: false, goalDoctorFreedom: false,
       goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
+      enrolledMedicare: false, collectingSS: false,
     },
   })
 
@@ -168,6 +172,61 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+
+              {/* Medicare / SS enrollment status */}
+              <FormField
+                control={form.control}
+                name="enrolledMedicare"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Are you currently enrolled in Medicare?</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        value={field.value ? 'yes' : 'no'}
+                        onValueChange={(v) => field.onChange(v === 'yes')}
+                        className="flex gap-6 mt-1"
+                      >
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl><RadioGroupItem value="yes" /></FormControl>
+                          <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl><RadioGroupItem value="no" /></FormControl>
+                          <FormLabel className="font-normal cursor-pointer">No</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="collectingSS"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Are you currently collecting Social Security benefits?</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        value={field.value ? 'yes' : 'no'}
+                        onValueChange={(v) => field.onChange(v === 'yes')}
+                        className="flex gap-6 mt-1"
+                      >
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl><RadioGroupItem value="yes" /></FormControl>
+                          <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl><RadioGroupItem value="no" /></FormControl>
+                          <FormLabel className="font-normal cursor-pointer">No</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Saving...' : 'Get Started'}

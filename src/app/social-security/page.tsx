@@ -8,6 +8,7 @@ import { getFullRetirementAge, fraToString } from '@/lib/milestones'
 export default async function SocialSecurityPage() {
   const [user] = await db.select().from(users).orderBy(desc(users.id)).limit(1)
   const dob = user?.dateOfBirth ?? null
+  const collectingSS = user?.collectingSS ?? false
 
   let fraInfo = null
   if (dob) {
@@ -28,7 +29,32 @@ export default async function SocialSecurityPage() {
         When you claim Social Security is one of the most consequential retirement decisions you'll make. Waiting can permanently increase your monthly benefit by tens of thousands of dollars over your lifetime.
       </p>
 
-      {fraInfo && (
+      {collectingSS ? (
+        <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-6">
+          <p className="text-sm font-semibold text-green-800 dark:text-green-400">✓ You are currently collecting Social Security</p>
+          <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+            Up to <strong>85% of your Social Security benefit may be taxable</strong> depending on your combined income.
+            Consider strategies like Roth conversions in lower-income years to manage your tax bracket.
+            If you haven't already, enroll in Medicare Part B — being on Social Security does not automatically enroll you if you delayed past 65.
+          </p>
+          {fraInfo && (
+            <div className="grid grid-cols-3 gap-4 mt-3 text-sm border-t border-green-300 pt-3">
+              <div>
+                <p className="font-semibold text-green-900 dark:text-green-200">{fraInfo.earlyYear}</p>
+                <p className="text-xs text-green-700 dark:text-green-400">Earliest claim (age 62)</p>
+              </div>
+              <div>
+                <p className="font-semibold text-green-900 dark:text-green-200">{fraInfo.fraYear}</p>
+                <p className="text-xs text-green-700 dark:text-green-400">Full Retirement Age ({fraToString(fraInfo.fra)})</p>
+              </div>
+              <div>
+                <p className="font-semibold text-green-900 dark:text-green-200">{fraInfo.maxYear}</p>
+                <p className="text-xs text-green-700 dark:text-green-400">Max benefit (age 70)</p>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : fraInfo ? (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 mb-6">
           <p className="text-sm font-semibold text-primary">Your Key Social Security Ages</p>
           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
@@ -46,7 +72,7 @@ export default async function SocialSecurityPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

@@ -12,13 +12,15 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json()
   const { name, dateOfBirth, zipCode, filingStatus,
-    goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage } = body
+    goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
+    enrolledMedicare, collectingSS } = body
 
   const [user] = await db
     .insert(users)
     .values({
       name, dateOfBirth, zipCode, filingStatus,
       goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
+      enrolledMedicare, collectingSS,
       createdAt: new Date().toISOString(),
     })
     .returning()
