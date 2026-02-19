@@ -6,5 +6,11 @@ export const users = sqliteTable('users', {
   dateOfBirth: text().notNull(),
   zipCode: text().notNull(),
   filingStatus: text(),
+  // Supplemental insurance goals
+  goalCatastrophicRisk: int({ mode: 'boolean' }).default(false),
+  goalDoctorFreedom: int({ mode: 'boolean' }).default(false),
+  goalMinPremium: int({ mode: 'boolean' }).default(false),
+  goalMinTotalCost: int({ mode: 'boolean' }).default(false),
+  goalTravelCoverage: int({ mode: 'boolean' }).default(false),
   createdAt: text().notNull(),
 })

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,11 +20,24 @@ const FILING_STATUSES = [
   { value: 'qualifying_surviving_spouse', label: 'Qualifying Surviving Spouse' },
 ]
 
+const INSURANCE_GOALS = [
+  { name: 'goalCatastrophicRisk' as const, label: 'Protect against catastrophic medical costs' },
+  { name: 'goalDoctorFreedom' as const, label: 'Freedom to choose any doctor or hospital' },
+  { name: 'goalMinPremium' as const, label: 'Keep monthly premiums as low as possible' },
+  { name: 'goalMinTotalCost' as const, label: 'Minimize total annual out-of-pocket costs' },
+  { name: 'goalTravelCoverage' as const, label: 'Coverage when traveling internationally' },
+]
+
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid US zip code'),
   filingStatus: z.string().min(1, 'Please select a filing status'),
+  goalCatastrophicRisk: z.boolean(),
+  goalDoctorFreedom: z.boolean(),
+  goalMinPremium: z.boolean(),
+  goalMinTotalCost: z.boolean(),
+  goalTravelCoverage: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -35,7 +49,11 @@ export default function AccountPage() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: '', dateOfBirth: '', zipCode: '', filingStatus: '' },
+    defaultValues: {
+      name: '', dateOfBirth: '', zipCode: '', filingStatus: '',
+      goalCatastrophicRisk: false, goalDoctorFreedom: false,
+      goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
+    },
   })
 
   useEffect(() => {
@@ -49,6 +67,11 @@ export default function AccountPage() {
             dateOfBirth: user.dateOfBirth,
             zipCode: user.zipCode,
             filingStatus: user.filingStatus ?? '',
+            goalCatastrophicRisk: user.goalCatastrophicRisk ?? false,
+            goalDoctorFreedom: user.goalDoctorFreedom ?? false,
+            goalMinPremium: user.goalMinPremium ?? false,
+            goalMinTotalCost: user.goalMinTotalCost ?? false,
+            goalTravelCoverage: user.goalTravelCoverage ?? false,
           })
         }
         setLoading(false)
@@ -68,7 +91,7 @@ export default function AccountPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-12">
+      <main className="mx-auto max-w-2xl px-4 py-12">
         <p className="text-muted-foreground">Loading...</p>
       </main>
     )
@@ -76,15 +99,16 @@ export default function AccountPage() {
 
   if (!userId) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-12">
+      <main className="mx-auto max-w-2xl px-4 py-12">
         <p className="text-muted-foreground">No account found. Please complete the questionnaire on the home page first.</p>
       </main>
     )
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-12">
-      <Card className="max-w-md">
+    <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
+
+      <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Your Account</CardTitle>
           <CardDescription>Update your personal details.</CardDescription>
@@ -93,72 +117,73 @@ export default function AccountPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
-              <FormField
-                control={form.control}
-                name="dateOfBirth"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date of Birth</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date of Birth</FormLabel>
+                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
-              <FormField
-                control={form.control}
-                name="zipCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zip Code</FormLabel>
-                    <FormControl>
-                      <Input maxLength={10} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="zipCode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Zip Code</FormLabel>
+                  <FormControl><Input maxLength={10} {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
-              <FormField
-                control={form.control}
-                name="filingStatus"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tax Filing Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a filing status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {FILING_STATUSES.map((s) => (
-                          <SelectItem key={s.value} value={s.value}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="filingStatus" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax Filing Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select a filing status" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FILING_STATUSES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              {/* Supplemental insurance goals */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium leading-none">Medicare Supplemental Insurance Priorities</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Your selections tailor the plan recommendations on the Medicare page.
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4 space-y-3">
+                  {INSURANCE_GOALS.map((goal) => (
+                    <FormField
+                      key={goal.name}
+                      control={form.control}
+                      name={goal.name}
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-3 space-y-0">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">{goal.label}</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
 
               <div className="flex items-center gap-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -171,6 +196,7 @@ export default function AccountPage() {
           </Form>
         </CardContent>
       </Card>
+
     </main>
   )
 }

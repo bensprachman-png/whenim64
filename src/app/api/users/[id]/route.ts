@@ -6,11 +6,13 @@ import { NextResponse } from 'next/server'
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await request.json()
-  const { name, dateOfBirth, zipCode, filingStatus } = body
+  const { name, dateOfBirth, zipCode, filingStatus,
+    goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage } = body
 
   const [user] = await db
     .update(users)
-    .set({ name, dateOfBirth, zipCode, filingStatus })
+    .set({ name, dateOfBirth, zipCode, filingStatus,
+      goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage })
     .where(eq(users.id, parseInt(id)))
     .returning()
 

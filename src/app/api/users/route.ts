@@ -11,11 +11,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json()
-  const { name, dateOfBirth, zipCode, filingStatus } = body
+  const { name, dateOfBirth, zipCode, filingStatus,
+    goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage } = body
 
   const [user] = await db
     .insert(users)
-    .values({ name, dateOfBirth, zipCode, filingStatus, createdAt: new Date().toISOString() })
+    .values({
+      name, dateOfBirth, zipCode, filingStatus,
+      goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
+      createdAt: new Date().toISOString(),
+    })
     .returning()
 
   return NextResponse.json(user, { status: 201 })
