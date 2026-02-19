@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { SendHorizonalIcon } from 'lucide-react'
+import { SendHorizonalIcon, MicIcon, MicOffIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -48,8 +48,59 @@ export default function HelpPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isListening, setIsListening] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort()
+    }
+  }, [])
+
+  function toggleListening() {
+    if (isListening) {
+      recognitionRef.current?.stop()
+      setIsListening(false)
+      return
+    }
+
+    const SpeechRecognitionAPI =
+      window.SpeechRecognition ?? (window as Window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
+
+    if (!SpeechRecognitionAPI) {
+      setError('Voice input is not supported in your browser. Try Chrome or Edge.')
+      return
+    }
+
+    const recognition = new SpeechRecognitionAPI()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => setIsListening(true)
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let transcript = ''
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript
+      }
+      setInput(transcript)
+    }
+
+    recognition.onend = () => setIsListening(false)
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      setIsListening(false)
+      if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        setError(`Voice input error: ${event.error}`)
+      }
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -166,9 +217,22 @@ export default function HelpPage() {
           placeholder="Ask a retirement question… (Enter to send, Shift+Enter for new line)"
           rows={1}
           disabled={loading}
-          className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[40px] max-h-[120px]"
+          className={cn(
+            'flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[40px] max-h-[120px]',
+            isListening && 'ring-2 ring-destructive border-destructive'
+          )}
           style={{ fieldSizing: 'content' } as React.CSSProperties}
         />
+        <Button
+          type="button"
+          onClick={toggleListening}
+          disabled={loading}
+          size="icon"
+          variant={isListening ? 'destructive' : 'outline'}
+          title={isListening ? 'Stop listening' : 'Start voice input'}
+        >
+          {isListening ? <MicOffIcon className="size-4" /> : <MicIcon className="size-4" />}
+        </Button>
         <Button type="submit" disabled={loading || !input.trim()} size="icon">
           <SendHorizonalIcon className="size-4" />
         </Button>

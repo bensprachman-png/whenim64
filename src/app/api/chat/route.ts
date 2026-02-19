@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { users } from '@/db/schema'
 import { desc } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { getFullRetirementAge, fraToString, calculateMilestones } from '@/lib/milestones'
 
 const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning assistant for WhenIm64. You help users understand:
 
@@ -15,9 +16,10 @@ const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning ass
 Keep answers clear, accurate, and actionable. When relevant, refer users to official sources (ssa.gov, medicare.gov). Do not give personalized investment advice — recommend they consult a financial advisor for specific investment decisions. Keep responses concise unless the question requires depth.`
 
 export async function POST(request: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey || apiKey === 'your-api-key-here') {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY is not configured. Add it to your .env.local file.' },
+      { error: 'ANTHROPIC_API_KEY is not configured. Add your key from console.anthropic.com to .env.local, then restart the dev server.' },
       { status: 500 }
     )
   }
@@ -32,28 +34,68 @@ export async function POST(request: Request) {
   let systemPrompt = SYSTEM_PROMPT
 
   if (user) {
-    const age = user.dateOfBirth
-      ? Math.floor((Date.now() - new Date(user.dateOfBirth + 'T00:00:00').getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    const dob = user.dateOfBirth ? new Date(user.dateOfBirth + 'T00:00:00') : null
+    const birthYear = dob?.getFullYear() ?? null
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const age = dob
+      ? Math.floor((today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
       : null
-    const birthYear = user.dateOfBirth ? new Date(user.dateOfBirth + 'T00:00:00').getFullYear() : null
 
-    systemPrompt += `\n\n---\nUser profile (use this to personalize your answers where relevant):\n` +
-      `- Name: ${user.name}\n` +
-      (age ? `- Age: ${age} (born ${birthYear})\n` : '') +
-      (user.zipCode ? `- ZIP code: ${user.zipCode}\n` : '') +
-      (user.filingStatus ? `- Tax filing status: ${user.filingStatus.replace(/_/g, ' ')}\n` : '') +
-      `- Enrolled in Medicare: ${user.enrolledMedicare ? 'Yes' : 'No'}\n` +
-      `- Collecting Social Security: ${user.collectingSS ? 'Yes' : 'No'}\n`
+    const fra = birthYear ? getFullRetirementAge(birthYear) : null
+    const fraStr = fra ? fraToString(fra) : null
+    const fraYear = birthYear && fra ? birthYear + fra.years : null
+
+    const milestones = calculateMilestones(user.dateOfBirth)
+    const futureMilestones = milestones.filter((m) => m.year && m.year > currentYear)
+
+    const goals: string[] = []
+    if (user.goalMinPremium)       goals.push('minimize monthly premium')
+    if (user.goalMinTotalCost)     goals.push('minimize total out-of-pocket cost')
+    if (user.goalCatastrophicRisk) goals.push('protect against catastrophic risk')
+    if (user.goalDoctorFreedom)    goals.push('keep freedom to choose any doctor')
+    if (user.goalTravelCoverage)   goals.push('maintain coverage while traveling')
+
+    const lines: string[] = [
+      `\n\n---`,
+      `User profile — use these facts to give specific, personalised answers. Mention relevant ages, years, and deadlines directly rather than speaking in generalities.`,
+      `- Name: ${user.name}`,
+    ]
+
+    if (age !== null && birthYear) lines.push(`- Current age: ${age} (born ${birthYear})`)
+    if (user.zipCode)             lines.push(`- ZIP code: ${user.zipCode}`)
+    if (user.filingStatus)        lines.push(`- Tax filing status: ${user.filingStatus.replace(/_/g, ' ')}`)
+    lines.push(`- Enrolled in Medicare: ${user.enrolledMedicare ? 'Yes' : 'No'}`)
+    lines.push(`- Collecting Social Security: ${user.collectingSS ? 'Yes' : 'No'}`)
+    if (fraStr && fraYear)        lines.push(`- Full Retirement Age (FRA): ${fraStr} (year ${fraYear})`)
+    if (goals.length)             lines.push(`- Supplemental insurance priorities: ${goals.join(', ')}`)
+
+    if (futureMilestones.length) {
+      lines.push(`- Upcoming milestones:`)
+      for (const m of futureMilestones) {
+        const yearsAway = m.year! - currentYear
+        lines.push(`  • ${m.label} at age ${m.age} (${m.year}, ${yearsAway} yr${yearsAway !== 1 ? 's' : ''} away)`)
+      }
+    }
+
+    systemPrompt += lines.join('\n')
   }
 
-  const client = new Anthropic()
+  const client = new Anthropic({ apiKey })
 
-  const stream = await client.messages.stream({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages,
-  })
+  // Initiate the stream — catch auth/network errors before committing to a streaming response
+  let stream: Awaited<ReturnType<typeof client.messages.stream>>
+  try {
+    stream = await client.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to connect to Anthropic API.'
+    return NextResponse.json({ error: message }, { status: 502 })
+  }
 
   const encoder = new TextEncoder()
   const readable = new ReadableStream({
@@ -67,6 +109,9 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(chunk.delta.text))
           }
         }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Stream error'
+        controller.enqueue(encoder.encode(`\n\n[Error: ${message}]`))
       } finally {
         controller.close()
       }
