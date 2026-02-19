@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       `- Name: ${user.name}`,
     ]
 
-    if (age !== null && birthYear) lines.push(`- Current age: ${age} (born ${birthYear})`)
+    if (age !== null && user.dateOfBirth) lines.push(`- Date of birth: ${user.dateOfBirth} (age ${age})`)
     if (user.zipCode)             lines.push(`- ZIP code: ${user.zipCode}`)
     if (user.filingStatus)        lines.push(`- Tax filing status: ${user.filingStatus.replace(/_/g, ' ')}`)
     lines.push(`- Enrolled in Medicare: ${user.enrolledMedicare ? 'Yes' : 'No'}`)
