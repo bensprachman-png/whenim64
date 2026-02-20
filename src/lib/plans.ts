@@ -370,7 +370,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Aetna',
     planId: 'medigap-g', planLabel: 'Plan G',
     premiumRange: '$118–$190/mo', phone: '1-833-570-6867',
-    quoteUrl: 'https://www.aetnamedicare.com/supplements',
+    quoteUrl: 'https://www.aetna.com/medicare/compare-plans-enroll/medicare-supplement-plans.html',
   },
   // ── Standard Medigap Plan N ─────────────────────────────────────────────
   {
@@ -395,7 +395,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Aetna',
     planId: 'medigap-n', planLabel: 'Plan N',
     premiumRange: '$78–$138/mo', phone: '1-833-570-6867',
-    quoteUrl: 'https://www.aetnamedicare.com/supplements',
+    quoteUrl: 'https://www.aetna.com/medicare/compare-plans-enroll/medicare-supplement-plans.html',
   },
   // ── Standard Medigap Plan K ─────────────────────────────────────────────
   {
@@ -427,7 +427,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Aetna',
     planId: 'advantage', planLabel: 'Medicare Advantage',
     premiumRange: '$0–$60/mo', phone: '1-833-570-6867',
-    quoteUrl: 'https://www.aetnamedicare.com/medicare-advantage',
+    quoteUrl: 'https://www.aetna.com/medicare/compare-plans-enroll/medicare-advantage-plans.html',
   },
   {
     name: 'Cigna',
@@ -441,19 +441,19 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Blue Cross Blue Shield MA (Medex)',
     planId: 'ma-supplement1a', planLabel: 'Supplement 1A',
     premiumRange: '$140–$240/mo', phone: '1-800-262-2583',
-    quoteUrl: 'https://www.bluecrossma.org/medicare/',
+    quoteUrl: 'https://medicare.bluecrossma.com/shop-plans/medicare-supplement-plans',
   },
   {
     name: 'Harvard Pilgrim / Point32Health',
     planId: 'ma-supplement1a', planLabel: 'Supplement 1A',
     premiumRange: '$135–$230/mo', phone: '1-888-333-4742',
-    quoteUrl: 'https://www.harvardpilgrim.org/medicare/',
+    quoteUrl: 'https://www.harvardpilgrim.org/enroll/medicare',
   },
   {
     name: 'Tufts Insurance (Point32Health)',
     planId: 'ma-supplement1a', planLabel: 'Supplement 1A',
     premiumRange: '$138–$225/mo', phone: '1-800-870-9488',
-    quoteUrl: 'https://www.tuftshealthplan.com/medicare',
+    quoteUrl: 'https://tuftshealthplan.com/plans-benefits/explore-our-plans/medicare-plans',
   },
   {
     name: 'AARP / UnitedHealthcare',
@@ -465,7 +465,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Humana',
     planId: 'ma-supplement1a', planLabel: 'Supplement 1A',
     premiumRange: '$140–$235/mo', phone: '1-800-213-5286',
-    quoteUrl: 'https://www.humana.com/medicare/medigap-policies',
+    quoteUrl: 'https://www.humana.com/medicare/medicare-supplement-plans',
     note: 'Exiting MA Medigap market April 1, 2026 — no new enrollments after that date',
     exitingStates: ['MA'],
   },
@@ -473,13 +473,13 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Blue Cross Blue Shield MA (Medex)',
     planId: 'ma-supplement1', planLabel: 'Supplement 1',
     premiumRange: '$155–$260/mo', phone: '1-800-262-2583',
-    quoteUrl: 'https://www.bluecrossma.org/medicare/',
+    quoteUrl: 'https://medicare.bluecrossma.com/shop-plans/medicare-supplement-plans',
   },
   {
     name: 'Harvard Pilgrim / Point32Health',
     planId: 'ma-supplement1', planLabel: 'Supplement 1',
     premiumRange: '$148–$250/mo', phone: '1-888-333-4742',
-    quoteUrl: 'https://www.harvardpilgrim.org/medicare/',
+    quoteUrl: 'https://www.harvardpilgrim.org/enroll/medicare',
   },
   {
     name: 'Fallon Health',
@@ -491,7 +491,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Blue Cross Blue Shield MA (Medex)',
     planId: 'ma-core', planLabel: 'Core Plan',
     premiumRange: '$60–$110/mo', phone: '1-800-262-2583',
-    quoteUrl: 'https://www.bluecrossma.org/medicare/',
+    quoteUrl: 'https://medicare.bluecrossma.com/shop-plans/medicare-supplement-plans',
   },
 
   // ── Minnesota ───────────────────────────────────────────────────────────
@@ -511,7 +511,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Medica',
     planId: 'mn-extended', planLabel: 'Extended Basic',
     premiumRange: '$108–$180/mo', phone: '1-855-632-1091',
-    quoteUrl: 'https://www.medica.com/medicare',
+    quoteUrl: 'https://www.medica.com/shop/medicare',
   },
   {
     name: 'AARP / UnitedHealthcare',
@@ -523,7 +523,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Medica',
     planId: 'mn-basic', planLabel: 'Basic Plan',
     premiumRange: '$72–$135/mo', phone: '1-855-632-1091',
-    quoteUrl: 'https://www.medica.com/medicare',
+    quoteUrl: 'https://www.medica.com/shop/medicare',
   },
 
   // ── Wisconsin ───────────────────────────────────────────────────────────
