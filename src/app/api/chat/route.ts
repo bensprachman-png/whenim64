@@ -1,9 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '@/db'
-import { users } from '@/db/schema'
-import { desc } from 'drizzle-orm'
+import { profiles } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 import { getFullRetirementAge, fraToString, calculateMilestones } from '@/lib/milestones'
+import { auth } from '@/lib/auth'
 
 const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning assistant for WhenIm64. You help users understand:
 
@@ -35,7 +37,10 @@ export async function POST(request: Request) {
   }
 
   // Enrich system prompt with user's profile for personalized answers
-  const [user] = await db.select().from(users).orderBy(desc(users.id)).limit(1)
+  const session = await auth.api.getSession({ headers: await headers() })
+  const [user] = session
+    ? await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
+    : []
   let systemPrompt = SYSTEM_PROMPT
 
   if (user) {

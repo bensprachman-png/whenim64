@@ -1,12 +1,17 @@
 import { db } from '@/db'
-import { users } from '@/db/schema'
-import { desc } from 'drizzle-orm'
+import { profiles } from '@/db/schema'
+import { eq } from 'drizzle-orm'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getFullRetirementAge, fraToString } from '@/lib/milestones'
 
 export default async function SocialSecurityPage() {
-  const [user] = await db.select().from(users).orderBy(desc(users.id)).limit(1)
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session) redirect('/login')
+  const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
   const dob = user?.dateOfBirth ?? null
   const collectingSS = user?.collectingSS ?? false
 

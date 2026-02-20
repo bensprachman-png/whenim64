@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useSession } from '@/lib/auth-client'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,7 +49,9 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 export default function AccountPage() {
-  const [userId, setUserId] = useState<number | null>(null)
+  const { data: session } = useSession()
+  const [profileId, setProfileId] = useState<number | null>(null)
+  const [hasPassword, setHasPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
 
@@ -64,35 +68,57 @@ export default function AccountPage() {
   useEffect(() => {
     fetch('/api/users')
       .then((r) => r.json())
-      .then((user) => {
-        if (user) {
-          setUserId(user.id)
+      .then((profile) => {
+        if (profile) setHasPassword(profile.hasPassword ?? false)
+        if (profile?.id) {
+          setProfileId(profile.id)
           form.reset({
-            name: user.name,
-            email: user.email ?? '',
-            dateOfBirth: user.dateOfBirth,
-            zipCode: user.zipCode,
-            filingStatus: user.filingStatus ?? '',
-            goalCatastrophicRisk: user.goalCatastrophicRisk ?? false,
-            goalDoctorFreedom: user.goalDoctorFreedom ?? false,
-            goalMinPremium: user.goalMinPremium ?? false,
-            goalMinTotalCost: user.goalMinTotalCost ?? false,
-            goalTravelCoverage: user.goalTravelCoverage ?? false,
-            enrolledMedicare: user.enrolledMedicare ?? false,
-            collectingSS: user.collectingSS ?? false,
+            name: profile.name,
+            email: profile.email ?? '',
+            dateOfBirth: profile.dateOfBirth,
+            zipCode: profile.zipCode,
+            filingStatus: profile.filingStatus ?? '',
+            goalCatastrophicRisk: profile.goalCatastrophicRisk ?? false,
+            goalDoctorFreedom: profile.goalDoctorFreedom ?? false,
+            goalMinPremium: profile.goalMinPremium ?? false,
+            goalMinTotalCost: profile.goalMinTotalCost ?? false,
+            goalTravelCoverage: profile.goalTravelCoverage ?? false,
+            enrolledMedicare: profile.enrolledMedicare ?? false,
+            collectingSS: profile.collectingSS ?? false,
+          })
+        } else {
+          // New user — pre-populate from auth session
+          form.reset({
+            name: session?.user?.name ?? '',
+            email: session?.user?.email ?? '',
+            dateOfBirth: '', zipCode: '', filingStatus: '',
+            goalCatastrophicRisk: false, goalDoctorFreedom: false,
+            goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
+            enrolledMedicare: false, collectingSS: false,
           })
         }
         setLoading(false)
       })
-  }, [form])
+  }, [form, session])
 
   async function onSubmit(values: FormValues) {
-    if (!userId) return
-    await fetch(`/api/users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    })
+    if (profileId) {
+      // Update existing profile
+      await fetch(`/api/users/${profileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      })
+    } else {
+      // Create new profile
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      })
+      const created = await res.json()
+      setProfileId(created.id)
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -105,21 +131,19 @@ export default function AccountPage() {
     )
   }
 
-  if (!userId) {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-12">
-        <p className="text-muted-foreground">No account found. Please complete the questionnaire on the home page first.</p>
-      </main>
-    )
-  }
+  const isNew = !profileId
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">Your Account</CardTitle>
-          <CardDescription>Update your personal details.</CardDescription>
+          <CardTitle className="text-2xl">{isNew ? 'Welcome — Set Up Your Profile' : 'Your Account'}</CardTitle>
+          <CardDescription>
+            {isNew
+              ? 'Tell us a bit about yourself so we can personalise your retirement planning guidance.'
+              : 'Update your personal details.'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -267,15 +291,41 @@ export default function AccountPage() {
 
               <div className="flex items-center gap-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
+                  {form.formState.isSubmitting ? 'Saving...' : isNew ? 'Save & Continue' : 'Save Changes'}
                 </Button>
-                {saved && <p className="text-sm text-green-600">Changes saved!</p>}
+                {saved && <p className="text-sm text-green-600">{isNew ? 'Profile created!' : 'Changes saved!'}</p>}
               </div>
 
             </form>
           </Form>
         </CardContent>
       </Card>
+
+      {!isNew && hasPassword && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Security</CardTitle>
+            <CardDescription>Manage two-factor authentication for your account.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {session?.user?.twoFactorEnabled ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-green-600 font-medium">Two-factor authentication is enabled.</span>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/mfa/setup">Reconfigure 2FA</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">Two-factor authentication is not enabled.</span>
+                <Button size="sm" asChild>
+                  <Link href="/mfa/setup">Enable 2FA</Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
     </main>
   )
