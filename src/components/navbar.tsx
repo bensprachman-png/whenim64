@@ -4,13 +4,17 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
+import { CircleHelp, Settings, LogOut } from 'lucide-react'
 
 const navItems = [
   { label: 'Social Security', href: '/social-security' },
   { label: 'Medicare', href: '/medicare' },
   { label: 'Taxes', href: '/taxes' },
-  { label: 'Help', href: '/help' },
-  { label: 'Account', href: '/account' },
+]
+
+const iconNavItems = [
+  { label: 'Help', href: '/help', icon: CircleHelp },
+  { label: 'Account', href: '/account', icon: Settings },
 ]
 
 export default function Navbar() {
@@ -23,12 +27,18 @@ export default function Navbar() {
     router.push('/login')
   }
 
+  const iconLinkClass = (href: string) =>
+    `rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground ${
+      pathname === href ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
+    }`
+
   return (
     <nav className="border-b bg-background">
       <div className="mx-auto max-w-6xl px-4 flex h-16 items-center justify-between">
         <Link href="/" className="text-xl font-bold tracking-tight">
           WhenIm64
         </Link>
+
         <div className="flex items-center gap-2">
           {session && (
             <ul className="flex items-center gap-1">
@@ -48,11 +58,26 @@ export default function Navbar() {
               ))}
             </ul>
           )}
+
           {session ? (
-            <div className="flex items-center gap-3 ml-4">
-              <span className="text-sm text-muted-foreground hidden sm:inline">{session.user.name}</span>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                Sign Out
+            <div className="flex items-center gap-1 ml-3">
+              <div className="h-4 w-px bg-border mx-1" />
+              {iconNavItems.map(({ label, href, icon: Icon }) => (
+                <Link key={href} href={href} title={label} className={iconLinkClass(href)}>
+                  <Icon className="size-[18px]" />
+                </Link>
+              ))}
+              <span className="text-sm text-muted-foreground hidden sm:inline mx-2">
+                {session.user.name}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                title="Sign Out"
+                className="text-muted-foreground size-9"
+              >
+                <LogOut className="size-[18px]" />
               </Button>
             </div>
           ) : (
