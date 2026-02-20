@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey || apiKey === 'your-api-key-here') {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY is not configured. Add your key from console.anthropic.com to .env.local, then restart the dev server.' },
+      { error: 'ANTHROPIC_API_KEY is not configured.' },
       { status: 500 }
     )
   }
