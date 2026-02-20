@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { getFullRetirementAge, fraToString, calculateMilestones } from '@/lib/milestones'
 import { auth } from '@/lib/auth'
+import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
 
 const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning assistant for WhenIm64. You help users understand:
 
@@ -21,6 +22,46 @@ Formatting rules:
 - Use plain text only — no markdown headers (##), no bold (**text**), no italic (*text*)
 - Use bullet points (- item) or numbered lists for multiple items
 - Use a blank line between sections if the answer has more than one part`
+
+function buildYearDataPrompt(): string {
+  const calendarYear = new Date().getFullYear()
+  const defaultYear = resolveYear(undefined)
+
+  const sections = SUPPORTED_YEARS.map((year) => {
+    const d = getYearData(year)
+    const tag = year === calendarYear ? ' (current year)' : ''
+
+    function fmtBracket(floor: number, ceiling: number | null): string {
+      const lo = `$${floor.toLocaleString('en-US')}`
+      const hi = ceiling ? `$${ceiling.toLocaleString('en-US')}` : 'no limit'
+      return `${lo}–${hi}`
+    }
+
+    const singleRows = d.irmaaSingle.map((b) =>
+      `  ${fmtBracket(b.incomeFloor, b.incomeCeiling)}: Part B $${b.partBPremium.toFixed(2)}/mo` +
+      (b.partDSurcharge > 0 ? ` | Part D +$${b.partDSurcharge.toFixed(2)}/mo` : '')
+    ).join('\n')
+
+    const jointRows = d.irmaaJoint.map((b) =>
+      `  ${fmtBracket(b.incomeFloor, b.incomeCeiling)}: Part B $${b.partBPremium.toFixed(2)}/mo` +
+      (b.partDSurcharge > 0 ? ` | Part D +$${b.partDSurcharge.toFixed(2)}/mo` : '')
+    ).join('\n')
+
+    return `${year} Medicare figures${tag}:
+- Part B base premium: $${d.partBPremium.toFixed(2)}/mo
+- Part B deductible: $${d.partBDeductible}/yr
+- Medicare Advantage in-network OOP max: $${d.medicareAdvantageOOPMax.toLocaleString('en-US')}/yr
+- Medigap Plan K OOP cap: $${d.medigapKOOPMax.toLocaleString('en-US')}/yr
+- QCD limit: $${d.qcdLimit.toLocaleString('en-US')}/yr
+- IRMAA look-back year: ${d.irmaaBaseYear} (CMS uses ${d.irmaaBaseYear} MAGI to set ${year} surcharges)
+IRMAA ${year} — Single filers (${d.irmaaBaseYear} MAGI):
+${singleRows}
+IRMAA ${year} — Married filing jointly (${d.irmaaBaseYear} MAGI):
+${jointRows}`
+  }).join('\n\n')
+
+  return `\n\n---\nVerified Medicare financial data — use these numbers, not your training data:\nDefault year for questions without a specified year: ${defaultYear}\n\n${sections}`
+}
 
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -41,7 +82,7 @@ export async function POST(request: Request) {
   const [user] = session
     ? await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
     : []
-  let systemPrompt = SYSTEM_PROMPT
+  let systemPrompt = SYSTEM_PROMPT + buildYearDataPrompt()
 
   if (user) {
     const dob = user.dateOfBirth ? new Date(user.dateOfBirth + 'T00:00:00') : null

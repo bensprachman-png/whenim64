@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -18,12 +18,13 @@ interface Props {
 
 export default function YearSelector({ currentYear, supportedYears, calendarYear }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
 
   function handleChange(value: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set('year', value)
-    router.replace(`?${params.toString()}`)
+    router.replace(`${pathname}?${params.toString()}`)
   }
 
   return (
