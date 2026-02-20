@@ -301,7 +301,7 @@ export default function AccountPage() {
         </CardContent>
       </Card>
 
-      {!isNew && hasPassword && (
+      {hasPassword && (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Security</CardTitle>
