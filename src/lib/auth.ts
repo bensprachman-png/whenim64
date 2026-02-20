@@ -9,6 +9,7 @@ export const auth = betterAuth({
     provider: 'sqlite',
     schema: { user, session, account, verification, twoFactor: twoFactorTable },
   }),
+  trustedOrigins: ['https://whenim64.ai', 'https://www.whenim64.ai'],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
