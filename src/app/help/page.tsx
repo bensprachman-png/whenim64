@@ -10,6 +10,27 @@ interface Message {
   content: string
 }
 
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
 const SUGGESTED_QUESTIONS = [
   'When should I sign up for Medicare?',
   'What is the difference between Medigap and Medicare Advantage?',
@@ -51,7 +72,7 @@ export default function HelpPage() {
   const [isListening, setIsListening] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
 
   useEffect(() => {
     return () => {
@@ -67,21 +88,22 @@ export default function HelpPage() {
     }
 
     const SpeechRecognitionAPI =
-      window.SpeechRecognition ?? (window as Window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
+      (window as Window & { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).SpeechRecognition ??
+      (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).webkitSpeechRecognition
 
     if (!SpeechRecognitionAPI) {
       setError('Voice input is not supported in your browser. Try Chrome or Edge.')
       return
     }
 
-    const recognition = new SpeechRecognitionAPI()
+    const recognition: SpeechRecognitionInstance = new SpeechRecognitionAPI()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
 
     recognition.onstart = () => setIsListening(true)
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event) => {
       let transcript = ''
       for (let i = 0; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript
@@ -91,7 +113,7 @@ export default function HelpPage() {
 
     recognition.onend = () => setIsListening(false)
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event) => {
       setIsListening(false)
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
         setError(`Voice input error: ${event.error}`)
