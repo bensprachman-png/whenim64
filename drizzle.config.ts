@@ -5,6 +5,7 @@ export default defineConfig({
   out: './drizzle',
   dialect: 'sqlite',
   dbCredentials: {
-    url: './whenim64.db',
-  },
+    url: process.env.TURSO_DATABASE_URL ?? 'file:./whenim64.db',
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  } as { url: string },
 })
