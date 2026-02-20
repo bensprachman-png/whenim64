@@ -9,7 +9,7 @@ import MilestoneTimeline from '@/components/milestone-timeline'
 import YearSelector from '@/components/year-selector'
 import IrmaaTable from '@/components/irmaa-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
+import { resolveYear, getYearData } from '@/lib/retirement-data'
 
 export default async function TaxesPage({
   searchParams,
@@ -30,7 +30,6 @@ export default async function TaxesPage({
   const params = await searchParams
   const year = resolveYear(params.year)
   const yd = getYearData(year)
-  const calendarYear = new Date().getFullYear()
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
@@ -42,7 +41,7 @@ export default async function TaxesPage({
           Strategic tax planning — especially around Required Minimum Distributions — can save you tens of thousands of dollars. The window between retirement and age 73 is your best opportunity to act.
         </p>
         <Suspense fallback={null}>
-          <YearSelector currentYear={year} supportedYears={SUPPORTED_YEARS} calendarYear={calendarYear} />
+          <YearSelector />
         </Suspense>
       </div>
 

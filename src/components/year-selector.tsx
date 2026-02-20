@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -8,32 +8,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { SupportedYear } from '@/lib/retirement-data'
+import { SUPPORTED_YEARS, resolveYear } from '@/lib/retirement-data'
 
-interface Props {
-  currentYear: SupportedYear
-  supportedYears: SupportedYear[]
-  calendarYear: number
-}
-
-export default function YearSelector({ currentYear, supportedYears, calendarYear }: Props) {
-  const router = useRouter()
-  const pathname = usePathname()
+// Self-contained: reads the current year from the URL and navigates via
+// window.location.href (hard GET) so the server component always re-renders
+// with fresh searchParams. No props required.
+export default function YearSelector() {
   const searchParams = useSearchParams()
+  const year = resolveYear(searchParams.get('year') ?? undefined)
+  const calendarYear = new Date().getFullYear()
 
   function handleChange(value: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.set('year', value)
-    router.replace(`${pathname}?${params.toString()}`)
+    window.location.href = `${window.location.pathname}?${params.toString()}`
   }
 
   return (
-    <Select value={String(currentYear)} onValueChange={handleChange}>
+    <Select value={String(year)} onValueChange={handleChange}>
       <SelectTrigger className="w-36 shrink-0">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {supportedYears.map((y) => (
+        {SUPPORTED_YEARS.map((y) => (
           <SelectItem key={y} value={String(y)}>
             {y}{y === calendarYear ? ' (current)' : ''}
           </SelectItem>

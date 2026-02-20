@@ -9,7 +9,7 @@ import MilestoneTimeline from '@/components/milestone-timeline'
 import PlanFinder from '@/components/plan-finder'
 import YearSelector from '@/components/year-selector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
+import { resolveYear, getYearData } from '@/lib/retirement-data'
 
 function getIEP(dob: string) {
   const dobDate = new Date(dob + 'T00:00:00')
@@ -58,7 +58,6 @@ export default async function MedicarePage({
   const params = await searchParams
   const year = resolveYear(params.year)
   const yd = getYearData(year)
-  const calendarYear = new Date().getFullYear()
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
@@ -70,7 +69,7 @@ export default async function MedicarePage({
           Medicare is federal health insurance for people 65 and older. Understanding when and how to enroll — and which supplemental coverage to add — can save you thousands per year.
         </p>
         <Suspense fallback={null}>
-          <YearSelector currentYear={year} supportedYears={SUPPORTED_YEARS} calendarYear={calendarYear} />
+          <YearSelector />
         </Suspense>
       </div>
 
