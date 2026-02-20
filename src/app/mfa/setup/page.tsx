@@ -9,12 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-type Step = 'password' | 'qr' | 'backup'
+type Step = 'password' | 'qr' | 'verify' | 'backup'
 
 export default function MfaSetupPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('password')
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
   const [qrCode, setQrCode] = useState('')
   const [totpURI, setTotpURI] = useState('')
   const [backupCodes, setBackupCodes] = useState<string[]>([])
@@ -50,6 +51,23 @@ export default function MfaSetupPage() {
     const dataUrl = await QRCode.toDataURL(uri)
     setQrCode(dataUrl)
     setStep('qr')
+    setLoading(false)
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    const result = await authClient.twoFactor.verifyTotp({ code: totpCode })
+
+    if (result.error) {
+      setError(result.error.message ?? 'Invalid code. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    setStep('backup')
     setLoading(false)
   }
 
@@ -91,7 +109,7 @@ export default function MfaSetupPage() {
           <CardHeader>
             <CardTitle className="text-2xl">Scan QR Code</CardTitle>
             <CardDescription>
-              Scan this code with your authenticator app (e.g. Google Authenticator, Authy), then click Enable.
+              Scan this code with Google Authenticator or Authy, then click Continue.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -104,10 +122,46 @@ export default function MfaSetupPage() {
               <summary className="cursor-pointer">Can&apos;t scan? Enter manually</summary>
               <p className="mt-2 break-all font-mono">{totpURI}</p>
             </details>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button className="w-full" onClick={() => setStep('backup')}>
-              Continue
+            <Button className="w-full" onClick={() => setStep('verify')}>
+              I&apos;ve scanned it — Continue
             </Button>
+          </CardContent>
+        </Card>
+      </main>
+    )
+  }
+
+  if (step === 'verify') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle className="text-2xl">Verify Setup</CardTitle>
+            <CardDescription>
+              Enter the 6-digit code from your authenticator app to confirm setup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleVerify} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="code">Authenticator Code</Label>
+                <Input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                  required
+                  autoFocus
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading || totpCode.length !== 6}>
+                {loading ? 'Verifying...' : 'Verify & Activate'}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </main>
@@ -118,9 +172,9 @@ export default function MfaSetupPage() {
     <main className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Save Backup Codes</CardTitle>
+          <CardTitle className="text-2xl">Two-Factor Auth Enabled</CardTitle>
           <CardDescription>
-            Store these codes somewhere safe. Each can be used once to sign in if you lose access to your authenticator.
+            Store these backup codes somewhere safe. Each can be used once to sign in if you lose your authenticator.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
