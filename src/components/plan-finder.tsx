@@ -2,6 +2,7 @@
 
 import { getPlansForState, getProvidersForPlan, Goals, PlanSummary } from '@/lib/plans'
 import { zipToState, getStateName, isNonStandardMedigapState } from '@/lib/zip-to-state'
+import { getYearData } from '@/lib/retirement-data'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +12,7 @@ interface Props {
   goals: Goals
   birthYear?: number | null
   year: number
+  filingStatus?: string | null
 }
 
 function Check({ yes }: { yes: boolean }) {
@@ -73,12 +75,24 @@ function StateNotice({ state }: { state: string }) {
   return null
 }
 
-export default function PlanFinder({ age, zipCode, goals, birthYear, year }: Props) {
+export default function PlanFinder({ age, zipCode, goals, birthYear, year, filingStatus }: Props) {
   const state = zipCode ? zipToState(zipCode) : null
   const stateName = state ? getStateName(state) : null
   const effectiveAge = age ?? 65
 
   const plans = getPlansForState(goals, effectiveAge, state, birthYear ?? undefined, year)
+
+  // IRMAA footer context
+  const yd = getYearData(year)
+  const isJoint = filingStatus === 'married_jointly' || filingStatus === 'qualifying_surviving_spouse'
+  const isMFS = filingStatus === 'married_separately'
+  const surchargeBrackets = isJoint ? yd.irmaaJoint : yd.irmaaSingle
+  const firstTier = surchargeBrackets[1] // index 0 = base (no surcharge), 1 = first IRMAA tier
+  const partBExtra = (firstTier.partBPremium - yd.partBPremium).toFixed(2)
+  const partDExtra = firstTier.partDSurcharge.toFixed(2)
+  const singleThreshold = yd.irmaaSingle[1].incomeFloor.toLocaleString('en-US')
+  const jointThreshold = yd.irmaaJoint[1].incomeFloor.toLocaleString('en-US')
+  const threshold = isJoint ? jointThreshold : singleThreshold
   const hasGoals = Object.values(goals).some(Boolean)
   const topScore = plans[0].score
   const topPlan = plans[0]
@@ -171,11 +185,41 @@ export default function PlanFinder({ age, zipCode, goals, birthYear, year }: Pro
         </table>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        * Premium estimates are approximate for a 65-year-old. Actual premiums vary by age, gender,
-        state, tobacco use, and insurer. Medigap plan benefits are federally standardized per plan
-        letter — identical across insurers. Contact providers directly for exact quotes.
-      </p>
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          * Premium estimates are approximate for a 65-year-old. Actual premiums vary by age, gender,
+          state, tobacco use, and insurer. Medigap plan benefits are federally standardized per plan
+          letter — identical across insurers. Contact providers directly for exact quotes.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          † Premiums above do not include the Part B premium (~${yd.partBPremium.toFixed(2)}/mo in {year}),
+          which all enrollees pay to Medicare separately on top of any plan premium.
+        </p>
+        {isMFS ? (
+          <p className="text-xs text-muted-foreground">
+            ‡ Married filing separately has significantly lower IRMAA income thresholds and steeper
+            surcharges than other filing statuses.{' '}
+            <a href="/taxes" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
+            for the full bracket table.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            ‡{' '}
+            {isJoint
+              ? `Based on your married filing jointly status, if your ${yd.irmaaBaseYear} MAGI exceeded $${threshold},`
+              : filingStatus
+              ? `If your ${yd.irmaaBaseYear} MAGI exceeded $${threshold},`
+              : `If your ${yd.irmaaBaseYear} MAGI exceeded $${singleThreshold} (single) or $${jointThreshold} (married filing jointly),`
+            }{' '}
+            IRMAA surcharges add at least +${partBExtra}/mo to Part B
+            {firstTier.partDSurcharge > 0 ? ` and +$${partDExtra}/mo to Part D` : ''}.
+            {!filingStatus && ' Set your filing status in Account for a personalised threshold.'}
+            {' '}
+            <a href="/taxes" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
+            for the full bracket table.
+          </p>
+        )}
+      </div>
 
       {/* Providers for top plan */}
       <div>

@@ -197,7 +197,7 @@ export default async function MedicarePage({
       <p className="text-muted-foreground mb-4">
         Recommendations based on your age, ZIP code, and supplemental insurance priorities from your account.
       </p>
-      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} />
+      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} filingStatus={user?.filingStatus ?? null} />
 
     </main>
   )
