@@ -352,7 +352,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'medigap-g', planLabel: 'Plan G',
     premiumRange: '$120–$195/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Mutual of Omaha',
@@ -377,7 +377,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'medigap-n', planLabel: 'Plan N',
     premiumRange: '$85–$145/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Mutual of Omaha',
@@ -421,7 +421,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'Humana',
     planId: 'advantage', planLabel: 'Medicare Advantage',
     premiumRange: '$0–$45/mo', phone: '1-800-213-5286',
-    quoteUrl: 'https://www.humana.com/medicare/medicare-advantage',
+    quoteUrl: 'https://www.humana.com/medicare/medicare-advantage-plans',
   },
   {
     name: 'Aetna',
@@ -459,7 +459,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'ma-supplement1a', planLabel: 'Supplement 1A',
     premiumRange: '$145–$245/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Humana',
@@ -499,7 +499,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'mn-extended', planLabel: 'Extended Basic',
     premiumRange: '$115–$195/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Mutual of Omaha',
@@ -517,7 +517,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'mn-basic', planLabel: 'Basic Plan',
     premiumRange: '$78–$145/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Medica',
@@ -531,7 +531,7 @@ const ALL_PROVIDERS: Provider[] = [
     name: 'AARP / UnitedHealthcare',
     planId: 'wi-basic', planLabel: 'Basic Plan',
     premiumRange: '$85–$160/mo', phone: '1-888-867-5788',
-    quoteUrl: 'https://www.medicare.com/supplement-insurance/',
+    quoteUrl: 'https://medicare.com/medicare-supplement/',
   },
   {
     name: 'Mutual of Omaha',
