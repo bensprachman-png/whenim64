@@ -30,9 +30,17 @@ export default async function SocialSecurityPage() {
       <MilestoneTimeline dateOfBirth={dob} highlight={['ss-early', 'ss-fra', 'ss-max']} />
 
       <h1 className="text-3xl font-bold mb-2">Social Security</h1>
-      <p className="text-muted-foreground mb-6">
+      <p className="text-muted-foreground mb-3">
         When you claim Social Security is one of the most consequential retirement decisions you'll make. Waiting can permanently increase your monthly benefit by tens of thousands of dollars over your lifetime.
       </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
+        <a href="https://www.ssa.gov/myaccount/" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          My Social Security Account →
+        </a>
+        <a href="https://www.ssa.gov/benefits/retirement" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          Apply for Benefits →
+        </a>
+      </div>
 
       {collectingSS ? (
         <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-6">
@@ -137,11 +145,12 @@ export default async function SocialSecurityPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p>Apply <strong className="text-foreground">up to 4 months before</strong> you want benefits to begin — your first payment arrives about a month after your elected start date.</p>
-            <p>• Online at <strong className="text-foreground">ssa.gov/benefits/retirement</strong></p>
+            <p>• Online at{' '}<a href="https://www.ssa.gov/benefits/retirement" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">ssa.gov/benefits/retirement</a></p>
             <p>• Call <strong className="text-foreground">1-800-772-1213</strong></p>
             <p>• Visit your local <strong className="text-foreground">Social Security office</strong></p>
             <p className="pt-2 text-xs">
-              Create a My Social Security account at ssa.gov to see your personalized benefit estimates at 62, FRA, and 70 based on your actual earnings history.
+              <a href="https://www.ssa.gov/myaccount/" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">Create a My Social Security account</a>{' '}
+              at ssa.gov to see your personalized benefit estimates at 62, FRA, and 70 based on your actual earnings history.
             </p>
           </CardContent>
         </Card>

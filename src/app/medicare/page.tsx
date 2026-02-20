@@ -75,6 +75,15 @@ export default async function MedicarePage({
         </Suspense>
       </div>
 
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
+        <a href="https://www.medicare.gov/account/login" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          My Medicare Account →
+        </a>
+        <a href="https://www.ssa.gov/medicare/sign-up" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          Enroll at SSA.gov →
+        </a>
+      </div>
+
       {enrolledMedicare ? (
         <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-8">
           <p className="text-sm font-semibold text-green-800 dark:text-green-400">✓ You are enrolled in Medicare</p>

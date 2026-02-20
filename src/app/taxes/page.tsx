@@ -47,6 +47,15 @@ export default async function TaxesPage({
         </Suspense>
       </div>
 
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
+        <a href="https://www.irs.gov/payments/your-online-account" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          IRS Online Account →
+        </a>
+        <a href="https://www.irs.gov/retirement-plans/plan-participant-employee/required-minimum-distributions-rmds" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
+          IRS RMD Resources →
+        </a>
+      </div>
+
       {rmdYear && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 mb-6">
           <p className="text-sm font-semibold text-primary">Your RMD Start Year</p>
