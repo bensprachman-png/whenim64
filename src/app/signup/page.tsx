@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -35,11 +36,17 @@ export default function SignupPage() {
 
   async function handleGoogle() {
     setError('')
-    setLoading(true)
-    const result = await signIn.social({ provider: 'google', callbackURL: '/account' })
-    if (result?.error) {
-      setError(result.error.message ?? 'Google sign-in failed.')
-      setLoading(false)
+    setGoogleLoading(true)
+    try {
+      const result = await signIn.social({ provider: 'google', callbackURL: '/account' })
+      if (result?.error) {
+        setError(result.error.message ?? 'Google sign-in failed.')
+        setGoogleLoading(false)
+      }
+      // On success, browser redirects — no need to clear loading
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed.')
+      setGoogleLoading(false)
     }
   }
 
@@ -101,8 +108,8 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <Button variant="outline" className="w-full" onClick={handleGoogle}>
-            Continue with Google
+          <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={googleLoading || loading}>
+            {googleLoading ? 'Redirecting to Google...' : 'Continue with Google'}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
