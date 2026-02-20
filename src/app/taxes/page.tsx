@@ -11,6 +11,8 @@ import IrmaaTable from '@/components/irmaa-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TaxesPage({
   searchParams,
 }: {

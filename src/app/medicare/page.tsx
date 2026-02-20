@@ -11,6 +11,8 @@ import YearSelector from '@/components/year-selector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 
+export const dynamic = 'force-dynamic'
+
 function getIEP(dob: string) {
   const dobDate = new Date(dob + 'T00:00:00')
   const bday65 = new Date(dobDate)
