@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { db } from '@/db'
 import { profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -5,9 +6,16 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
+import YearSelector from '@/components/year-selector'
+import IrmaaTable from '@/components/irmaa-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
 
-export default async function TaxesPage() {
+export default async function TaxesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>
+}) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
@@ -19,14 +27,24 @@ export default async function TaxesPage() {
     rmdYear = birthYear + 73
   }
 
+  const params = await searchParams
+  const year = resolveYear(params.year)
+  const yd = getYearData(year)
+  const calendarYear = new Date().getFullYear()
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
       <MilestoneTimeline dateOfBirth={dob} highlight={['rmd']} />
 
       <h1 className="text-3xl font-bold mb-2">Taxes in Retirement</h1>
-      <p className="text-muted-foreground mb-6">
-        Strategic tax planning — especially around Required Minimum Distributions — can save you tens of thousands of dollars. The window between retirement and age 73 is your best opportunity to act.
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <p className="text-muted-foreground">
+          Strategic tax planning — especially around Required Minimum Distributions — can save you tens of thousands of dollars. The window between retirement and age 73 is your best opportunity to act.
+        </p>
+        <Suspense fallback={null}>
+          <YearSelector currentYear={year} supportedYears={SUPPORTED_YEARS} calendarYear={calendarYear} />
+        </Suspense>
+      </div>
 
       {rmdYear && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 mb-6">
@@ -80,7 +98,9 @@ export default async function TaxesPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-3">
             <p>
-              If you're 70½ or older and charitably inclined, a <strong className="text-foreground">QCD</strong> lets you transfer up to <strong className="text-foreground">$108,000/year</strong> (2025, indexed for inflation) directly from your IRA to a qualified charity.
+              If you're 70½ or older and charitably inclined, a <strong className="text-foreground">QCD</strong> lets you transfer up to{' '}
+              <strong className="text-foreground">${yd.qcdLimit.toLocaleString('en-US')}/year</strong>{' '}
+              ({year}, indexed for inflation) directly from your IRA to a qualified charity.
             </p>
             <p>
               The transfer <strong className="text-foreground">counts toward your RMD</strong> but is excluded from your taxable income entirely — better than a deduction because it reduces your AGI, which affects Medicare premiums (IRMAA), Social Security taxation, and other phase-outs.
@@ -111,6 +131,14 @@ export default async function TaxesPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* IRMAA section */}
+      <h2 className="text-2xl font-bold mt-10 mb-2">IRMAA — Income-Related Medicare Adjustment</h2>
+      <p className="text-muted-foreground mb-6">
+        High-income retirees pay additional surcharges on Medicare Part B and Part D premiums. IRMAA is determined by your Modified Adjusted Gross Income (MAGI) from{' '}
+        <strong className="text-foreground">{yd.irmaaBaseYear}</strong> — two years prior to the premium year. Roth conversions and QCDs that reduce your {yd.irmaaBaseYear} MAGI can lower or eliminate these surcharges.
+      </p>
+      <IrmaaTable yearData={yd} />
     </main>
   )
 }

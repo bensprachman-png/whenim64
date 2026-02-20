@@ -1,3 +1,5 @@
+import { getYearData } from '@/lib/retirement-data'
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type PlanId =
@@ -54,9 +56,10 @@ function ageFactor(age: number): string {
 
 // ─── Standard (federal) plans — all states except MA / MN / WI ─────────────
 
-function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
+function scoreStandardPlans(goals: Goals, age: number, year: number): PlanSummary[] {
   const hasAnyGoal = Object.values(goals).some(Boolean)
   const af = ageFactor(age)
+  const yd = getYearData(year)
 
   const raw: Record<string, number> = {
     advantage: 0,
@@ -87,7 +90,7 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medicare Advantage',
       type: 'Medicare Advantage',
       premiumRange: `$0–$60/mo${af}`,
-      maxAnnualOOP: 'Up to $8,850/yr in-network',
+      maxAnnualOOP: `Up to $${yd.medicareAdvantageOOPMax.toLocaleString('en-US')}/yr in-network`,
       anyDoctor: false,
       foreignTravel: false,
       rxIncluded: true,
@@ -99,7 +102,7 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medigap Plan G',
       type: 'Medigap',
       premiumRange: `$110–$195/mo${af}`,
-      maxAnnualOOP: '~$257/yr (Part B deductible only, 2025)',
+      maxAnnualOOP: `~$${yd.partBDeductible}/yr (Part B deductible only, ${year})`,
       anyDoctor: true,
       foreignTravel: true,
       rxIncluded: false,
@@ -111,7 +114,7 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medigap Plan N',
       type: 'Medigap',
       premiumRange: `$75–$150/mo${af}`,
-      maxAnnualOOP: '~$257 deductible + $20 office / $50 ER copays',
+      maxAnnualOOP: `~$${yd.partBDeductible} deductible + $20 office / $50 ER copays`,
       anyDoctor: true,
       foreignTravel: true,
       rxIncluded: false,
@@ -123,7 +126,7 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medigap Plan K',
       type: 'Medigap',
       premiumRange: `$50–$100/mo${af}`,
-      maxAnnualOOP: '$7,220/yr cap (2025)',
+      maxAnnualOOP: `$${yd.medigapKOOPMax.toLocaleString('en-US')}/yr cap (${year})`,
       anyDoctor: true,
       foreignTravel: false,
       rxIncluded: false,
@@ -135,9 +138,10 @@ function scoreStandardPlans(goals: Goals, age: number): PlanSummary[] {
 
 // ─── Massachusetts plans ────────────────────────────────────────────────────
 
-function scoreMassachusettsPlans(goals: Goals, age: number, birthYear?: number): PlanSummary[] {
+function scoreMassachusettsPlans(goals: Goals, age: number, birthYear?: number, year: number = new Date().getFullYear()): PlanSummary[] {
   const hasAnyGoal = Object.values(goals).some(Boolean)
   const af = ageFactor(age)
+  const yd = getYearData(year)
 
   const raw: Record<string, number> = {
     'ma-supplement1a': hasAnyGoal ? 0 : 2,
@@ -212,7 +216,7 @@ function scoreMassachusettsPlans(goals: Goals, age: number, birthYear?: number):
       name: 'Medicare Advantage',
       type: 'Medicare Advantage',
       premiumRange: `$0–$60/mo${af}`,
-      maxAnnualOOP: 'Up to $8,850/yr in-network',
+      maxAnnualOOP: `Up to $${yd.medicareAdvantageOOPMax.toLocaleString('en-US')}/yr in-network`,
       anyDoctor: false,
       foreignTravel: false,
       rxIncluded: true,
@@ -224,9 +228,10 @@ function scoreMassachusettsPlans(goals: Goals, age: number, birthYear?: number):
 
 // ─── Minnesota plans ────────────────────────────────────────────────────────
 
-function scoreMinnesotaPlans(goals: Goals, age: number): PlanSummary[] {
+function scoreMinnesotaPlans(goals: Goals, age: number, year: number = new Date().getFullYear()): PlanSummary[] {
   const hasAnyGoal = Object.values(goals).some(Boolean)
   const af = ageFactor(age)
+  const yd = getYearData(year)
 
   const raw: Record<string, number> = {
     'mn-extended': hasAnyGoal ? 0 : 2,
@@ -270,7 +275,7 @@ function scoreMinnesotaPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medicare Advantage',
       type: 'Medicare Advantage',
       premiumRange: `$0–$60/mo${af}`,
-      maxAnnualOOP: 'Up to $8,850/yr in-network',
+      maxAnnualOOP: `Up to $${yd.medicareAdvantageOOPMax.toLocaleString('en-US')}/yr in-network`,
       anyDoctor: false,
       foreignTravel: false,
       rxIncluded: true,
@@ -282,9 +287,10 @@ function scoreMinnesotaPlans(goals: Goals, age: number): PlanSummary[] {
 
 // ─── Wisconsin plans ────────────────────────────────────────────────────────
 
-function scoreWisconsinPlans(goals: Goals, age: number): PlanSummary[] {
+function scoreWisconsinPlans(goals: Goals, age: number, year: number = new Date().getFullYear()): PlanSummary[] {
   const hasAnyGoal = Object.values(goals).some(Boolean)
   const af = ageFactor(age)
+  const yd = getYearData(year)
 
   const raw: Record<string, number> = {
     'wi-basic': hasAnyGoal ? 0 : 2,
@@ -315,7 +321,7 @@ function scoreWisconsinPlans(goals: Goals, age: number): PlanSummary[] {
       name: 'Medicare Advantage',
       type: 'Medicare Advantage',
       premiumRange: `$0–$60/mo${af}`,
-      maxAnnualOOP: 'Up to $8,850/yr in-network',
+      maxAnnualOOP: `Up to $${yd.medicareAdvantageOOPMax.toLocaleString('en-US')}/yr in-network`,
       anyDoctor: false,
       foreignTravel: false,
       rxIncluded: true,
@@ -327,11 +333,11 @@ function scoreWisconsinPlans(goals: Goals, age: number): PlanSummary[] {
 
 // ─── Public entry point ──────────────────────────────────────────────────────
 
-export function getPlansForState(goals: Goals, age: number, state: string | null, birthYear?: number): PlanSummary[] {
-  if (state === 'MA') return scoreMassachusettsPlans(goals, age, birthYear)
-  if (state === 'MN') return scoreMinnesotaPlans(goals, age)
-  if (state === 'WI') return scoreWisconsinPlans(goals, age)
-  return scoreStandardPlans(goals, age)
+export function getPlansForState(goals: Goals, age: number, state: string | null, birthYear?: number, year: number = new Date().getFullYear()): PlanSummary[] {
+  if (state === 'MA') return scoreMassachusettsPlans(goals, age, birthYear, year)
+  if (state === 'MN') return scoreMinnesotaPlans(goals, age, year)
+  if (state === 'WI') return scoreWisconsinPlans(goals, age, year)
+  return scoreStandardPlans(goals, age, year)
 }
 
 // ─── Providers ───────────────────────────────────────────────────────────────

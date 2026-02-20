@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { db } from '@/db'
 import { profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -6,7 +7,9 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import PlanFinder from '@/components/plan-finder'
+import YearSelector from '@/components/year-selector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
 
 function getIEP(dob: string) {
   const dobDate = new Date(dob + 'T00:00:00')
@@ -25,7 +28,11 @@ function getIEP(dob: string) {
   return { start: fmt(start), end: fmt(end), birthday: fmtFull(bday65) }
 }
 
-export default async function MedicarePage() {
+export default async function MedicarePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>
+}) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
@@ -48,14 +55,24 @@ export default async function MedicarePage() {
     travelCoverage: user?.goalTravelCoverage ?? false,
   }
 
+  const params = await searchParams
+  const year = resolveYear(params.year)
+  const yd = getYearData(year)
+  const calendarYear = new Date().getFullYear()
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
       <MilestoneTimeline dateOfBirth={dob} highlight={['medicare']} />
 
       <h1 className="text-3xl font-bold mb-2">Medicare</h1>
-      <p className="text-muted-foreground mb-6">
-        Medicare is federal health insurance for people 65 and older. Understanding when and how to enroll — and which supplemental coverage to add — can save you thousands per year.
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <p className="text-muted-foreground">
+          Medicare is federal health insurance for people 65 and older. Understanding when and how to enroll — and which supplemental coverage to add — can save you thousands per year.
+        </p>
+        <Suspense fallback={null}>
+          <YearSelector currentYear={year} supportedYears={SUPPORTED_YEARS} calendarYear={calendarYear} />
+        </Suspense>
+      </div>
 
       {enrolledMedicare ? (
         <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-8">
@@ -94,7 +111,7 @@ export default async function MedicarePage() {
           <CardHeader><CardTitle className="text-lg">What's Covered</CardTitle></CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <div><strong className="text-foreground">Part A</strong> — Hospital. Free for most (40+ work quarters). Inpatient, SNF, hospice.</div>
-            <div><strong className="text-foreground">Part B</strong> — Medical. ~$185/mo (2025). Doctor visits, outpatient, preventive care.</div>
+            <div><strong className="text-foreground">Part B</strong> — Medical. ~${yd.partBPremium.toFixed(2)}/mo ({year}). Doctor visits, outpatient, preventive care.</div>
             <div><strong className="text-foreground">Part D</strong> — Rx drugs. Purchased separately or via Medicare Advantage.</div>
             <p className="pt-1 text-xs">Original Medicare (A + B) covers 80% of approved costs. The remaining 20% — plus deductibles — is where supplemental insurance matters.</p>
           </CardContent>
@@ -160,7 +177,7 @@ export default async function MedicarePage() {
               <p>✓ Often <strong className="text-foreground">$0 monthly premium</strong></p>
               <p>✓ May include dental, vision, hearing, fitness benefits</p>
               <p>✓ Prescription drugs bundled (MAPD plans)</p>
-              <p>✓ Annual out-of-pocket cap (≤$8,850 in-network, 2025)</p>
+              <p>✓ Annual out-of-pocket cap (≤${yd.medicareAdvantageOOPMax.toLocaleString('en-US')} in-network, {year})</p>
             </div>
             <div className="space-y-1">
               <p className="font-semibold text-foreground text-xs uppercase tracking-wide">Disadvantages</p>
@@ -179,7 +196,7 @@ export default async function MedicarePage() {
       <p className="text-muted-foreground mb-4">
         Recommendations based on your age, ZIP code, and supplemental insurance priorities from your account.
       </p>
-      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} />
+      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} />
 
     </main>
   )
