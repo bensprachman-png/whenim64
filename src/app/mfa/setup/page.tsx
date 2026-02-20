@@ -21,36 +21,8 @@ export default function MfaSetupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleGetQR(e: React.FormEvent) {
+  async function handleEnable(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const result = await authClient.twoFactor.getTotpUri({ password })
-
-    if (result.error) {
-      setError(result.error.message ?? 'Failed to get QR code.')
-      setLoading(false)
-      return
-    }
-
-    const uri = result.data?.totpURI
-    if (!uri) {
-      setError('No TOTP URI returned.')
-      setLoading(false)
-      return
-    }
-
-    setTotpURI(uri)
-
-    const QRCode = (await import('qrcode')).default
-    const dataUrl = await QRCode.toDataURL(uri)
-    setQrCode(dataUrl)
-    setStep('qr')
-    setLoading(false)
-  }
-
-  async function handleEnable() {
     setError('')
     setLoading(true)
 
@@ -62,9 +34,22 @@ export default function MfaSetupPage() {
       return
     }
 
+    const uri = (result.data as { totpURI?: string })?.totpURI
     const codes = (result.data as { backupCodes?: string[] })?.backupCodes ?? []
+
+    if (!uri) {
+      setError('No TOTP URI returned.')
+      setLoading(false)
+      return
+    }
+
+    setTotpURI(uri)
     setBackupCodes(codes)
-    setStep('backup')
+
+    const QRCode = (await import('qrcode')).default
+    const dataUrl = await QRCode.toDataURL(uri)
+    setQrCode(dataUrl)
+    setStep('qr')
     setLoading(false)
   }
 
@@ -77,7 +62,7 @@ export default function MfaSetupPage() {
             <CardDescription>Confirm your password to get your authenticator setup code.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleGetQR} className="space-y-4">
+            <form onSubmit={handleEnable} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input
@@ -120,8 +105,8 @@ export default function MfaSetupPage() {
               <p className="mt-2 break-all font-mono">{totpURI}</p>
             </details>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button className="w-full" onClick={handleEnable} disabled={loading}>
-              {loading ? 'Enabling...' : 'Enable Two-Factor Authentication'}
+            <Button className="w-full" onClick={() => setStep('backup')}>
+              Continue
             </Button>
           </CardContent>
         </Card>
