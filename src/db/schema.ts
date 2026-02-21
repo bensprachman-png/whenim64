@@ -72,4 +72,5 @@ export const profiles = sqliteTable('profiles', {
   enrolledMedicare: int({ mode: 'boolean' }).default(false),
   collectingSS: int({ mode: 'boolean' }).default(false),
   createdAt: text().notNull(),
+  twoFactorMethod: text(),
 })

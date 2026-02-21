@@ -3,7 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { twoFactor } from 'better-auth/plugins'
 import { db } from '@/db'
 import { user, session, account, verification, twoFactor as twoFactorTable } from '@/db/schema'
-import { sendPasswordResetEmail } from '@/lib/email'
+import { sendPasswordResetEmail, sendTwoFactorOtpEmail } from '@/lib/email'
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -28,7 +28,14 @@ export const auth = betterAuth({
         }
       : {}),
   },
-  plugins: [twoFactor({ issuer: 'WhenIm64' })],
+  plugins: [twoFactor({
+    issuer: 'WhenIm64',
+    otpOptions: {
+      sendOTP: async (data: { user: { email: string }; otp: string }) => {
+        await sendTwoFactorOtpEmail(data.user.email, data.otp)
+      },
+    },
+  })],
 })
 
 export type Session = typeof auth.$Infer.Session

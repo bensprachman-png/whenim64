@@ -183,7 +183,14 @@ export default function MfaSetupPage() {
               <p key={code}>{code}</p>
             ))}
           </div>
-          <Button className="w-full" onClick={() => router.push('/account')}>
+          <Button className="w-full" onClick={async () => {
+            await fetch('/api/users/set-mfa-method', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ method: 'totp' }),
+            })
+            router.push('/account')
+          }}>
             Done
           </Button>
         </CardContent>
