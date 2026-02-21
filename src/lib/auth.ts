@@ -11,6 +11,17 @@ export const auth = betterAuth({
     schema: { user, session, account, verification, twoFactor: twoFactorTable },
   }),
   trustedOrigins: ['https://whenim64.ai', 'https://www.whenim64.ai'],
+  user: {
+    additionalFields: {
+      role: {
+        type: 'string',
+        required: false,
+        defaultValue: 'user',
+        input: false,
+        returned: true,
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
-import { CircleHelp, Settings, LogOut } from 'lucide-react'
+import { CircleHelp, Settings, LogOut, Shield } from 'lucide-react'
 
 const navItems = [
   { label: 'Social Security', href: '/social-security' },
@@ -67,6 +67,12 @@ export default function Navbar() {
                   <Icon className="size-[18px]" />
                 </Link>
               ))}
+              {((session.user as { role?: string }).role === 'admin' ||
+                (session.user as { role?: string }).role === 'superuser') && (
+                <Link href="/admin" title="Admin" className={iconLinkClass('/admin')}>
+                  <Shield className="size-[18px]" />
+                </Link>
+              )}
               <span className="text-sm text-muted-foreground hidden sm:inline mx-2">
                 {session.user.name}
               </span>

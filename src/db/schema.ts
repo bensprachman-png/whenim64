@@ -8,6 +8,7 @@ export const user = sqliteTable('user', {
   emailVerified: int({ mode: 'boolean' }).notNull().default(false),
   image: text(),
   twoFactorEnabled: int({ mode: 'boolean' }).default(false),
+  role: text().$type<'user' | 'admin' | 'superuser'>().notNull().default('user'),
   createdAt: int({ mode: 'timestamp' }).notNull(),
   updatedAt: int({ mode: 'timestamp' }).notNull(),
 })
@@ -53,6 +54,16 @@ export const twoFactor = sqliteTable('twoFactor', {
   secret: text(),
   backupCodes: text(),
   userId: text().notNull().references(() => user.id, { onDelete: 'cascade' }),
+})
+
+export const auditLog = sqliteTable('auditLog', {
+  id: int().primaryKey({ autoIncrement: true }),
+  userId: text().references(() => user.id, { onDelete: 'set null' }),
+  event: text().notNull(),   // 'login_failure' | 'role_changed' | 'user_deleted'
+  ip: text(),
+  userAgent: text(),
+  metadata: text(),          // JSON string
+  createdAt: int({ mode: 'timestamp' }).notNull(),
 })
 
 // Retirement profile table (renamed from users)

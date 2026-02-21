@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
@@ -11,8 +11,22 @@ import { Label } from '@/components/ui/label'
 
 type Step = 'password' | 'qr' | 'verify' | 'backup'
 
-export default function MfaSetupPage() {
+function AdminRequiredBanner() {
+  const searchParams = useSearchParams()
+  const isAdminRequired = searchParams.get('required') === 'admin'
+
+  if (!isAdminRequired) return null
+
+  return (
+    <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-400">
+      Admin access requires two-factor authentication. Please complete setup to continue.
+    </div>
+  )
+}
+
+function MfaSetupContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState<Step>('password')
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
@@ -21,6 +35,8 @@ export default function MfaSetupPage() {
   const [backupCodes, setBackupCodes] = useState<string[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const isAdminRequired = searchParams.get('required') === 'admin'
 
   async function handleEnable(e: React.FormEvent) {
     e.preventDefault()
@@ -80,6 +96,7 @@ export default function MfaSetupPage() {
             <CardDescription>Confirm your password to get your authenticator setup code.</CardDescription>
           </CardHeader>
           <CardContent>
+            <AdminRequiredBanner />
             <form onSubmit={handleEnable} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -189,12 +206,20 @@ export default function MfaSetupPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ method: 'totp' }),
             })
-            router.push('/account')
+            router.push(isAdminRequired ? '/admin' : '/account')
           }}>
             Done
           </Button>
         </CardContent>
       </Card>
     </main>
+  )
+}
+
+export default function MfaSetupPage() {
+  return (
+    <Suspense>
+      <MfaSetupContent />
+    </Suspense>
   )
 }

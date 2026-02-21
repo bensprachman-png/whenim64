@@ -1,5 +1,6 @@
 import { createAuthClient } from 'better-auth/react'
-import { twoFactorClient } from 'better-auth/client/plugins'
+import { twoFactorClient, inferAdditionalFields } from 'better-auth/client/plugins'
+import type { auth } from '@/lib/auth'
 
 const baseURL =
   typeof window !== 'undefined'
@@ -8,7 +9,10 @@ const baseURL =
 
 export const authClient = createAuthClient({
   baseURL,
-  plugins: [twoFactorClient()],
+  plugins: [
+    twoFactorClient(),
+    inferAdditionalFields<typeof auth>(),
+  ],
 })
 
 export const { signIn, signUp, signOut, useSession } = authClient
