@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useSession } from '@/lib/auth-client'
+import { useSession, authClient } from '@/lib/auth-client'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,6 +54,11 @@ export default function AccountPage() {
   const [hasPassword, setHasPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
+
+  const [changePw, setChangePw] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', totpCode: '' })
+  const [changePwError, setChangePwError] = useState('')
+  const [changePwDone, setChangePwDone] = useState(false)
+  const [changePwLoading, setChangePwLoading] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -121,6 +126,41 @@ export default function AccountPage() {
     }
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  async function handleChangePw(e: React.FormEvent) {
+    e.preventDefault()
+    setChangePwError('')
+    const { currentPassword, newPassword, confirmPassword, totpCode } = changePw
+    if (newPassword !== confirmPassword) { setChangePwError('Passwords do not match'); return }
+    if (newPassword.length < 8) { setChangePwError('Password must be at least 8 characters'); return }
+    setChangePwLoading(true)
+
+    if (session?.user?.twoFactorEnabled) {
+      const res = await fetch('/api/users/verify-totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: totpCode }),
+      })
+      if (!res.ok) {
+        setChangePwError('Invalid authenticator code.')
+        setChangePwLoading(false)
+        return
+      }
+    }
+
+    const result = await authClient.changePassword({
+      currentPassword,
+      newPassword,
+      revokeOtherSessions: false,
+    })
+    if (result.error) {
+      setChangePwError(result.error.message ?? 'Failed to change password.')
+    } else {
+      setChangePwDone(true)
+      setChangePw({ currentPassword: '', newPassword: '', confirmPassword: '', totpCode: '' })
+    }
+    setChangePwLoading(false)
   }
 
   if (loading) {
@@ -305,9 +345,9 @@ export default function AccountPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Security</CardTitle>
-            <CardDescription>Manage two-factor authentication for your account.</CardDescription>
+            <CardDescription>Manage two-factor authentication and your password.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {session?.user?.twoFactorEnabled ? (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-green-600 font-medium">Two-factor authentication is enabled.</span>
@@ -323,6 +363,67 @@ export default function AccountPage() {
                 </Button>
               </div>
             )}
+
+            <div className="border-t pt-4 mt-4">
+              <p className="text-sm font-medium mb-3">Change Password</p>
+              {changePwDone ? (
+                <p className="text-sm text-green-600">Password changed successfully.</p>
+              ) : (
+                <form onSubmit={handleChangePw} className="space-y-3">
+                  {session?.user?.twoFactorEnabled && (
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium" htmlFor="totpCode">Authenticator Code</label>
+                      <Input
+                        id="totpCode"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={changePw.totpCode}
+                        onChange={(e) => setChangePw((p) => ({ ...p, totpCode: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium" htmlFor="currentPassword">Current Password</label>
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={changePw.currentPassword}
+                      onChange={(e) => setChangePw((p) => ({ ...p, currentPassword: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium" htmlFor="newPassword">New Password</label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={changePw.newPassword}
+                      onChange={(e) => setChangePw((p) => ({ ...p, newPassword: e.target.value }))}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium" htmlFor="confirmPassword">Confirm New Password</label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={changePw.confirmPassword}
+                      onChange={(e) => setChangePw((p) => ({ ...p, confirmPassword: e.target.value }))}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                  {changePwError && <p className="text-sm text-destructive">{changePwError}</p>}
+                  <Button type="submit" size="sm" disabled={changePwLoading}>
+                    {changePwLoading ? 'Changing...' : 'Change Password'}
+                  </Button>
+                </form>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

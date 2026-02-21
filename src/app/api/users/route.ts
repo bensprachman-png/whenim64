@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, dateOfBirth, zipCode, filingStatus,
+  const { name, email, dateOfBirth, zipCode, filingStatus,
     goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
     enrolledMedicare, collectingSS } = body
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     .insert(profiles)
     .values({
       userId: session.user.id,
-      name, dateOfBirth, zipCode, filingStatus,
+      name, email, dateOfBirth, zipCode, filingStatus,
       goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
       enrolledMedicare, collectingSS,
       createdAt: new Date().toISOString(),

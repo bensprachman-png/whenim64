@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { twoFactor } from 'better-auth/plugins'
 import { db } from '@/db'
 import { user, session, account, verification, twoFactor as twoFactorTable } from '@/db/schema'
+import { sendPasswordResetEmail } from '@/lib/email'
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -13,6 +14,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
+    sendResetPassword: async ({ user, url }) => {
+      await sendPasswordResetEmail(user.email, url)
+    },
   },
   socialProviders: {
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET

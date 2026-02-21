@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -63,6 +64,9 @@ export default function LoginPage() {
           <CardDescription>Sign in to your WhenIm64 account.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {searchParams.get('reset') === '1' && (
+            <p className="text-sm text-green-600">Password reset successfully. Please sign in.</p>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -84,6 +88,11 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+            </div>
+            <div className="flex justify-end -mt-1">
+              <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline">
+                Forgot password?
+              </Link>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
@@ -113,5 +122,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }
