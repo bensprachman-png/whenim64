@@ -7,9 +7,12 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import PlanFinder from '@/components/plan-finder'
+import PartDFinder from '@/components/part-d-finder'
 import YearSelector from '@/components/year-selector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
+import { zipToState, getStateName } from '@/lib/zip-to-state'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +51,9 @@ export default async function MedicarePage({
     : null
 
   const birthYear = dob ? new Date(dob + 'T00:00:00').getFullYear() : null
+
+  const state = user?.zipCode ? zipToState(user.zipCode) : null
+  const stateName = state ? getStateName(state) : null
 
   const goals = {
     catastrophicRisk: user?.goalCatastrophicRisk ?? false,
@@ -201,12 +207,38 @@ export default async function MedicarePage({
         </Card>
       </div>
 
-      {/* Plan Finder */}
-      <h2 className="text-2xl font-bold mb-2">Plan Finder</h2>
-      <p className="text-muted-foreground mb-4">
-        Recommendations based on your age, ZIP code, and supplemental insurance priorities from your account.
-      </p>
-      <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} filingStatus={user?.filingStatus ?? null} />
+      {/* Plan Finder + Part D */}
+      <Accordion type="multiple" defaultValue={['supplemental', 'partd']} className="space-y-4">
+
+        <AccordionItem value="supplemental" className="border rounded-lg">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="text-left">
+              <h2 className="text-2xl font-bold">Supplemental Plan Finder</h2>
+              <p className="text-sm text-muted-foreground font-normal mt-0.5">
+                Recommendations based on your age, ZIP code, and priorities.
+              </p>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6">
+            <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} filingStatus={user?.filingStatus ?? null} />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="partd" className="border rounded-lg">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="text-left">
+              <h2 className="text-2xl font-bold">Prescription Drug Plans (Part D)</h2>
+              <p className="text-sm text-muted-foreground font-normal mt-0.5">
+                Compare standalone drug plans and understand how tier-based costs affect your wallet.
+              </p>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6">
+            <PartDFinder state={state} stateName={stateName} year={year} />
+          </AccordionContent>
+        </AccordionItem>
+
+      </Accordion>
 
     </main>
   )
