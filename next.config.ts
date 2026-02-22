@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ['snaptrade-typescript-sdk'],
 };
 
 export default nextConfig;

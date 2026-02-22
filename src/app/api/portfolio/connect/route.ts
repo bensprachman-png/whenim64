@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/db'
 import { snaptradeConnections, brokerageAccounts, holdings } from '@/db/schema'
 import { getSnaptradeClient } from '@/lib/snaptrade'
+import { encrypt, decrypt } from '@/lib/encrypt'
 
 export async function POST() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -19,20 +20,23 @@ export async function POST() {
     .from(snaptradeConnections)
     .where(eq(snaptradeConnections.userId, userId))
 
+  let userSecret: string
+
   if (!conn) {
     const regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
-    const userSecret = (regRes.data as { userSecret: string }).userSecret
+    userSecret = (regRes.data as { userSecret: string }).userSecret
     await db.insert(snaptradeConnections).values({
       userId,
-      snaptradeUserSecret: userSecret,
+      snaptradeUserSecret: encrypt(userSecret),
       createdAt: new Date(),
     })
-    conn = { userId, snaptradeUserSecret: userSecret, createdAt: new Date() }
+  } else {
+    userSecret = decrypt(conn.snaptradeUserSecret)
   }
 
   const loginRes = await snaptrade.authentication.loginSnapTradeUser({
     userId,
-    userSecret: conn.snaptradeUserSecret,
+    userSecret,
   })
   const redirectURI = (loginRes.data as { redirectURI: string }).redirectURI
 

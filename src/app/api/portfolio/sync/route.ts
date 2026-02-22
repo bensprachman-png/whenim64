@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/db'
 import { snaptradeConnections, brokerageAccounts, holdings } from '@/db/schema'
 import { getSnaptradeClient } from '@/lib/snaptrade'
+import { decrypt } from '@/lib/encrypt'
 import type { Account } from 'snaptrade-typescript-sdk'
 
 export async function POST() {
@@ -21,7 +22,7 @@ export async function POST() {
 
   if (!conn) return NextResponse.json({ error: 'Not connected' }, { status: 400 })
 
-  const { userId: _, snaptradeUserSecret: userSecret } = conn
+  const userSecret = decrypt(conn.snaptradeUserSecret)
 
   // Fetch all accounts
   const accountsRes = await snaptrade.accountInformation.listUserAccounts({
