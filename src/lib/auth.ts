@@ -39,6 +39,13 @@ export const auth = betterAuth({
         }
       : {}),
   },
+  rateLimit: {
+    window: 10,   // global: 100 requests per 10 seconds per IP (default)
+    max: 100,
+    customRules: {
+      '/sign-in/email': { window: 60, max: 10 }, // 10 login attempts per IP per 60s
+    },
+  },
   plugins: [twoFactor({
     issuer: 'WhenIm64',
     otpOptions: {
