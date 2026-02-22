@@ -23,6 +23,6 @@ export const config = {
      * - /_next/* (Next.js internals)
      * - /favicon.ico, static files
      */
-    '/((?!$|login|signup|mfa|api/auth|_next|favicon\\.ico).*)',
+    '/((?!$|login|signup|mfa|contact|api/auth|api/contact|_next|favicon\\.ico).*)',
   ],
 }
