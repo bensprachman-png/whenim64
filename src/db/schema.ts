@@ -1,4 +1,4 @@
-import { int, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { int, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // Better Auth tables
 export const user = sqliteTable('user', {
@@ -84,6 +84,40 @@ export const profiles = sqliteTable('profiles', {
   collectingSS: int({ mode: 'boolean' }).default(false),
   createdAt: text().notNull(),
   twoFactorMethod: text(),
+})
+
+export const snaptradeConnections = sqliteTable('snaptradeConnections', {
+  userId: text().primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  snaptradeUserSecret: text().notNull(),
+  createdAt: int({ mode: 'timestamp' }).notNull(),
+})
+
+export const brokerageAccounts = sqliteTable('brokerageAccounts', {
+  id: text().primaryKey(),
+  userId: text().notNull().references(() => user.id, { onDelete: 'cascade' }),
+  brokerageName: text().notNull(),
+  accountName: text(),
+  accountType: text(),
+  accountNumber: text(),
+  totalValue: real(),
+  currency: text(),
+  syncedAt: int({ mode: 'timestamp' }).notNull(),
+})
+
+export const holdings = sqliteTable('holdings', {
+  id: int().primaryKey({ autoIncrement: true }),
+  accountId: text().notNull().references(() => brokerageAccounts.id, { onDelete: 'cascade' }),
+  userId: text().notNull().references(() => user.id, { onDelete: 'cascade' }),
+  symbol: text(),
+  description: text(),
+  units: real(),
+  price: real(),
+  marketValue: real(),
+  costBasis: real(),
+  averagePurchasePrice: real(),
+  currency: text(),
+  securityType: text(),
+  syncedAt: int({ mode: 'timestamp' }).notNull(),
 })
 
 export const contacts = sqliteTable('contacts', {

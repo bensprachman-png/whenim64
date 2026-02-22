@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Social Security', href: '/social-security' },
   { label: 'Medicare', href: '/medicare' },
   { label: 'Taxes', href: '/taxes' },
+  { label: 'Portfolio', href: '/portfolio' },
 ]
 
 const iconNavItems = [
