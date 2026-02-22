@@ -119,6 +119,12 @@ function LoginForm() {
               Sign up
             </Link>
           </p>
+          <p className="text-center text-sm text-muted-foreground">
+            Questions?{' '}
+            <Link href="/contact" className="underline underline-offset-4 hover:text-primary">
+              Contact us
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </main>

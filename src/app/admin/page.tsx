@@ -1,13 +1,14 @@
-import { count, eq, max, sql } from 'drizzle-orm'
+import { count, desc, eq, max, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { user as userTable, session as sessionTable, account as accountTable, auditLog } from '@/db/schema'
+import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts } from '@/db/schema'
 import { requireAdminPage } from '@/lib/admin'
 import AdminUsersClient from './_components/AdminUsersClient'
+import AdminContactsClient, { type ContactRow } from './_components/AdminContactsClient'
 
 export default async function AdminPage() {
   const { role, userId } = await requireAdminPage()
 
-  const [users, sessionStats, failedStats, credentialAccounts] = await Promise.all([
+  const [users, sessionStats, failedStats, credentialAccounts, contactRows] = await Promise.all([
     db.select().from(userTable),
 
     db
@@ -34,7 +35,21 @@ export default async function AdminPage() {
       .select({ userId: accountTable.userId })
       .from(accountTable)
       .where(eq(accountTable.providerId, 'credential')),
+
+    db.select().from(contacts).orderBy(desc(contacts.createdAt)),
   ])
+
+  const contactData: ContactRow[] = contactRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone ?? null,
+    message: c.message,
+    isRead: !!c.isRead,
+    createdAt: c.createdAt instanceof Date
+      ? c.createdAt.toISOString()
+      : new Date((c.createdAt as number) * 1000).toISOString(),
+  }))
 
   const sessionMap = new Map(sessionStats.map((s) => [s.userId, s]))
   const failedMap = new Map(failedStats.map((f) => [f.userId, f]))
@@ -70,6 +85,9 @@ export default async function AdminPage() {
         callerRole={role}
         callerId={userId}
       />
+      <section className="mt-12">
+        <AdminContactsClient contacts={contactData} />
+      </section>
     </main>
   )
 }

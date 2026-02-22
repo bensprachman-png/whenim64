@@ -85,3 +85,13 @@ export const profiles = sqliteTable('profiles', {
   createdAt: text().notNull(),
   twoFactorMethod: text(),
 })
+
+export const contacts = sqliteTable('contacts', {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull(),
+  email: text().notNull(),
+  phone: text(),
+  message: text().notNull(),
+  isRead: int({ mode: 'boolean' }).notNull().default(false),
+  createdAt: int({ mode: 'timestamp' }).notNull(),
+})
