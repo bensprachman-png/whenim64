@@ -14,33 +14,41 @@ export async function POST() {
   const userId = session.user.id
   const snaptrade = getSnaptradeClient()
 
-  // Get or create SnapTrade registration
-  let [conn] = await db
-    .select()
-    .from(snaptradeConnections)
-    .where(eq(snaptradeConnections.userId, userId))
+  try {
+    // Get or create SnapTrade registration
+    let [conn] = await db
+      .select()
+      .from(snaptradeConnections)
+      .where(eq(snaptradeConnections.userId, userId))
 
-  let userSecret: string
+    let userSecret: string
 
-  if (!conn) {
-    const regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
-    userSecret = (regRes.data as { userSecret: string }).userSecret
-    await db.insert(snaptradeConnections).values({
+    if (!conn) {
+      const regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
+      userSecret = (regRes.data as { userSecret: string }).userSecret
+      await db.insert(snaptradeConnections).values({
+        userId,
+        snaptradeUserSecret: encrypt(userSecret),
+        createdAt: new Date(),
+      })
+    } else {
+      userSecret = decrypt(conn.snaptradeUserSecret)
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? 'http://localhost:3000'
+    const loginRes = await snaptrade.authentication.loginSnapTradeUser({
       userId,
-      snaptradeUserSecret: encrypt(userSecret),
-      createdAt: new Date(),
+      userSecret,
+      customRedirect: `${appUrl}/portfolio/connected`,
     })
-  } else {
-    userSecret = decrypt(conn.snaptradeUserSecret)
+    const redirectURI = (loginRes.data as { redirectURI: string }).redirectURI
+
+    return NextResponse.json({ redirectURI })
+  } catch (err) {
+    console.error('[portfolio/connect POST]', err)
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  const loginRes = await snaptrade.authentication.loginSnapTradeUser({
-    userId,
-    userSecret,
-  })
-  const redirectURI = (loginRes.data as { redirectURI: string }).redirectURI
-
-  return NextResponse.json({ redirectURI })
 }
 
 export async function DELETE(_req: NextRequest) {

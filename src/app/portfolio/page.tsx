@@ -101,7 +101,7 @@ export default async function PortfolioPage() {
     totalValue: a.totalValue ?? null,
     currency: a.currency ?? null,
     syncedAt: toIso(a.syncedAt),
-    taxTreatment: categorizeAccountType(a.accountType),
+    taxTreatment: categorizeAccountType(a.accountType, a.accountName),
   }))
 
   const holdingsData: HoldingRow[] = holdingRows.map((h) => ({
@@ -110,7 +110,7 @@ export default async function PortfolioPage() {
     brokerageName: h.brokerageName,
     accountName: h.accountName ?? null,
     accountType: h.accountType ?? null,
-    taxTreatment: categorizeAccountType(h.accountType),
+    taxTreatment: categorizeAccountType(h.accountType, h.accountName),
     symbol: h.symbol ?? null,
     description: h.description ?? null,
     units: h.units ?? null,

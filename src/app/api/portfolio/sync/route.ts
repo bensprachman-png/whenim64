@@ -24,47 +24,27 @@ export async function POST() {
 
   const userSecret = decrypt(conn.snaptradeUserSecret)
 
-  // Fetch all accounts
-  const accountsRes = await snaptrade.accountInformation.listUserAccounts({
-    userId,
-    userSecret,
-  })
-  const accounts: Account[] = accountsRes.data ?? []
+  try {
+    // Fetch all accounts
+    const accountsRes = await snaptrade.accountInformation.listUserAccounts({
+      userId,
+      userSecret,
+    })
+    const accounts: Account[] = accountsRes.data ?? []
 
-  // Fetch holdings for all accounts in parallel
-  const holdingsResults = await Promise.allSettled(
-    accounts.map((a) =>
-      snaptrade.accountInformation.getUserHoldings({
-        accountId: a.id,
-        userId,
-        userSecret,
-      })
-    )
-  )
+    const now = new Date()
+    const errors: string[] = []
+    let holdingsPending = 0
 
-  const now = new Date()
-  const errors: string[] = []
-
-  for (let i = 0; i < accounts.length; i++) {
-    const account = accounts[i]
-
-    // Upsert account row
-    await db
-      .insert(brokerageAccounts)
-      .values({
-        id: account.id,
-        userId,
-        brokerageName: account.institution_name,
-        accountName: account.name ?? null,
-        accountType: account.raw_type ?? null,
-        accountNumber: account.number ?? null,
-        totalValue: account.balance?.total?.amount ?? null,
-        currency: account.balance?.total?.currency ?? null,
-        syncedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: brokerageAccounts.id,
-        set: {
+    // Save all accounts to DB first, then fetch holdings only for accounts
+    // where SnapTrade has completed its initial sync. On first connect with
+    // brokerages like Fidelity this can take several minutes.
+    for (const account of accounts) {
+      await db
+        .insert(brokerageAccounts)
+        .values({
+          id: account.id,
+          userId,
           brokerageName: account.institution_name,
           accountName: account.name ?? null,
           accountType: account.raw_type ?? null,
@@ -72,43 +52,69 @@ export async function POST() {
           totalValue: account.balance?.total?.amount ?? null,
           currency: account.balance?.total?.currency ?? null,
           syncedAt: now,
-        },
-      })
+        })
+        .onConflictDoUpdate({
+          target: brokerageAccounts.id,
+          set: {
+            brokerageName: account.institution_name,
+            accountName: account.name ?? null,
+            accountType: account.raw_type ?? null,
+            accountNumber: account.number ?? null,
+            totalValue: account.balance?.total?.amount ?? null,
+            currency: account.balance?.total?.currency ?? null,
+            syncedAt: now,
+          },
+        })
 
-    const holdingsResult = holdingsResults[i]
-    if (holdingsResult.status === 'rejected') {
-      errors.push(`${account.institution_name}: ${String(holdingsResult.reason)}`)
-      continue
-    }
+      const initialSyncDone = account.sync_status?.holdings?.initial_sync_completed ?? false
+      if (!initialSyncDone) {
+        holdingsPending++
+        continue
+      }
 
-    const positions = holdingsResult.value.data?.positions ?? []
-
-    // Replace holdings for this account
-    await db.delete(holdings).where(eq(holdings.accountId, account.id))
-
-    if (positions.length > 0) {
-      await db.insert(holdings).values(
-        positions.map((pos) => ({
+      // Holdings are ready — fetch and upsert
+      try {
+        const holdingsRes = await snaptrade.accountInformation.getUserHoldings({
           accountId: account.id,
           userId,
-          symbol: pos.symbol?.symbol?.symbol ?? null,
-          description: pos.symbol?.symbol?.description ?? null,
-          units: pos.units ?? null,
-          price: pos.price ?? null,
-          marketValue: (pos.units ?? 0) * (pos.price ?? 0),
-          costBasis: (pos.units ?? 0) * (pos.average_purchase_price ?? 0),
-          averagePurchasePrice: pos.average_purchase_price ?? null,
-          currency: pos.symbol?.symbol?.currency?.code ?? null,
-          securityType: pos.symbol?.symbol?.type?.description ?? null,
-          syncedAt: now,
-        }))
-      )
-    }
-  }
+          userSecret,
+        })
+        const positions = holdingsRes.data?.positions ?? []
 
-  return NextResponse.json({
-    success: true,
-    accountCount: accounts.length,
-    ...(errors.length > 0 ? { errors } : {}),
-  })
+        await db.delete(holdings).where(eq(holdings.accountId, account.id))
+
+        if (positions.length > 0) {
+          await db.insert(holdings).values(
+            positions.map((pos) => ({
+              accountId: account.id,
+              userId,
+              symbol: pos.symbol?.symbol?.symbol ?? null,
+              description: pos.symbol?.symbol?.description ?? null,
+              units: pos.units ?? null,
+              price: pos.price ?? null,
+              marketValue: (pos.units ?? 0) * (pos.price ?? 0),
+              costBasis: (pos.units ?? 0) * (pos.average_purchase_price ?? 0),
+              averagePurchasePrice: pos.average_purchase_price ?? null,
+              currency: pos.symbol?.symbol?.currency?.code ?? null,
+              securityType: pos.symbol?.symbol?.type?.description ?? null,
+              syncedAt: now,
+            }))
+          )
+        }
+      } catch (err) {
+        errors.push(`${account.institution_name}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      accountCount: accounts.length,
+      holdingsPending,
+      ...(errors.length > 0 ? { errors } : {}),
+    })
+  } catch (err) {
+    console.error('[portfolio/sync]', err)
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

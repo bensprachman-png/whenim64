@@ -95,6 +95,7 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [error, setError] = useState('')
   const [syncErrors, setSyncErrors] = useState<string[]>([])
+  const [holdingsPending, setHoldingsPending] = useState(0)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'marketValue', desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
@@ -128,6 +129,7 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
         setError(data.error ?? 'Sync failed')
       } else {
         if (data.errors?.length) setSyncErrors(data.errors)
+        setHoldingsPending(data.holdingsPending ?? 0)
         startTransition(() => router.refresh())
       }
     } catch {
@@ -315,9 +317,16 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
           </Button>
         </div>
         <div className="rounded-lg border bg-card p-8 text-center space-y-4">
-          <p className="text-muted-foreground">
-            Your brokerage is connected. Sync now to load your accounts and holdings.
-          </p>
+          {holdingsPending > 0 ? (
+            <p className="text-muted-foreground">
+              Your brokerage is syncing in the background — this can take a few minutes for the first connection.
+              Click <strong>Sync Now</strong> again once it&apos;s ready.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Your brokerage is connected. Sync now to load your accounts and holdings.
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={handleSync} disabled={syncing} className="gap-2">
             <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -349,6 +358,11 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
       {error && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+      {holdingsPending > 0 && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-4 py-3 text-sm text-blue-800 dark:text-blue-300">
+          {holdingsPending} account{holdingsPending !== 1 ? 's are' : ' is'} still syncing in the background — click <strong>Sync Now</strong> again in a minute to load holdings.
         </div>
       )}
       {syncErrors.length > 0 && (
@@ -383,23 +397,32 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
 
       {/* Account cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {accounts.map((a) => (
-          <div key={a.id} className="rounded-lg border bg-card p-4 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-semibold text-sm">{a.brokerageName}</p>
-                {a.accountName && <p className="text-xs text-muted-foreground">{a.accountName}</p>}
+        {accounts.map((a) => {
+          const isPending = a.totalValue == null
+          return (
+            <div key={a.id} className={`rounded-lg border bg-card p-4 space-y-2 ${isPending ? 'opacity-70' : ''}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-sm">{a.brokerageName}</p>
+                  {a.accountName && <p className="text-xs text-muted-foreground">{a.accountName}</p>}
+                </div>
+                <TaxBadge treatment={a.taxTreatment} />
               </div>
-              <TaxBadge treatment={a.taxTreatment} />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground font-mono text-xs">
+                  {a.accountNumber ? `****${a.accountNumber.slice(-4)}` : a.accountType ?? '—'}
+                </span>
+                {isPending ? (
+                  <span className="text-xs text-muted-foreground italic flex items-center gap-1">
+                    <RefreshCw className="size-3 animate-spin" /> Syncing…
+                  </span>
+                ) : (
+                  <span className="font-medium">{fmtCurrency(a.totalValue)} {a.currency ?? ''}</span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground font-mono text-xs">
-                {a.accountNumber ? `****${a.accountNumber.slice(-4)}` : a.accountType ?? '—'}
-              </span>
-              <span className="font-medium">{fmtCurrency(a.totalValue)} {a.currency ?? ''}</span>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Holdings table */}
