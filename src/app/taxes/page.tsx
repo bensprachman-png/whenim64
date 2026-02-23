@@ -67,6 +67,17 @@ export default async function TaxesPage({
         </Suspense>
       </div>
 
+      <div className="rounded-lg border bg-card px-5 py-4 mb-6 text-sm text-muted-foreground space-y-2">
+        <p>
+          <strong className="text-foreground">IRA &amp; Roth IRA contributions require earned income.</strong>{' '}
+          You can only contribute to a traditional or Roth IRA in years when you (or your spouse, if filing jointly) have wages, self-employment income, or other earned income — investment income and Social Security do not qualify. The {year} annual limit is <strong className="text-foreground">${yd.iraContributionLimit.toLocaleString('en-US')}</strong> per person (<strong className="text-foreground">${yd.iraCatchUpLimit.toLocaleString('en-US')}</strong> if age 50 or older).
+        </p>
+        <p>
+          <strong className="text-foreground">Still working? Prioritize Roth contributions.</strong>{' '}
+          Unlike traditional IRAs and 401(k)s, Roth accounts are never subject to Required Minimum Distributions during your lifetime. Every dollar you convert or contribute to a Roth now is a dollar that can compound tax-free and will never force a taxable withdrawal at 73. If you have earned income in the years approaching retirement, maxing out a Roth IRA — or doing Roth conversions during low-income years — is one of the most powerful tools available to reduce your future tax burden.
+        </p>
+      </div>
+
       <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
         <a href="https://www.irs.gov/payments/your-online-account" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
           IRS Online Account →

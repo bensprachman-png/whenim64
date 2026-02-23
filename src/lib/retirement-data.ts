@@ -17,6 +17,8 @@ export interface YearData {
   medigapKOOPMax: number         // annual $
   partDOOPMax: number            // annual Part D out-of-pocket cap (Inflation Reduction Act)
   partDMaxDeductible: number     // maximum standard Part D deductible
+  iraContributionLimit: number   // annual $ (under 50)
+  iraCatchUpLimit: number        // annual $ (50+, includes catch-up)
   qcdLimit: number               // annual $
   irmaaBaseYear: number          // look-back year CMS uses for this year's premiums
   irmaaSingle: IrmaaBracket[]
@@ -38,6 +40,8 @@ const YEAR_DATA: Record<SupportedYear, YearData> = {
     medigapKOOPMax: 7220,
     partDOOPMax: 2000,
     partDMaxDeductible: 590,
+    iraContributionLimit: 7000,
+    iraCatchUpLimit: 8000,
     qcdLimit: 108000,
     irmaaBaseYear: 2023,
     irmaaSingle: [
@@ -66,6 +70,8 @@ const YEAR_DATA: Record<SupportedYear, YearData> = {
     medigapKOOPMax: 8000,
     partDOOPMax: 2100,
     partDMaxDeductible: 600,
+    iraContributionLimit: 7000,
+    iraCatchUpLimit: 8000,
     qcdLimit: 111000,
     irmaaBaseYear: 2024,
     irmaaSingle: [
