@@ -13,6 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 import { zipToState, getStateName } from '@/lib/zip-to-state'
+import { getPlansForState } from '@/lib/plans'
+import MedicareEnrollmentCard from './_components/MedicareEnrollmentCard'
+import MedicarePlanElectionsCard from './_components/MedicarePlanElectionsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +46,6 @@ export default async function MedicarePage({
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
   const dob = user?.dateOfBirth ?? null
   const iep = dob ? getIEP(dob) : null
-  const enrolledMedicare = user?.enrolledMedicare ?? false
   const collectingSS = user?.collectingSS ?? false
 
   const age = dob
@@ -51,6 +53,22 @@ export default async function MedicarePage({
     : null
 
   const birthYear = dob ? new Date(dob + 'T00:00:00').getFullYear() : null
+
+  const spouseDob = user?.spouseDateOfBirth ?? null
+  const spouseAge = spouseDob
+    ? Math.floor((Date.now() - new Date(spouseDob + 'T00:00:00').getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    : null
+  // Show spouse section if DOB is known OR if filing status indicates a spouse exists
+  const hasSpouse = spouseAge !== null || user?.filingStatus === 'married_jointly'
+
+  const enrolledPartA = user?.enrolledPartA ?? false
+  const enrolledPartB = user?.enrolledPartB ?? false
+  const spouseEnrolledPartA = user?.spouseEnrolledPartA ?? false
+  const spouseEnrolledPartB = user?.spouseEnrolledPartB ?? false
+  const medicarePlanType = user?.medicarePlanType ?? null
+  const spouseMedicarePlanType = user?.spouseMedicarePlanType ?? null
+  const pdpTier = user?.pdpTier ?? null
+  const spousePdpTier = user?.spousePdpTier ?? null
 
   const state = user?.zipCode ? zipToState(user.zipCode) : null
   const stateName = state ? getStateName(state) : null
@@ -66,6 +84,10 @@ export default async function MedicarePage({
   const params = await searchParams
   const year = resolveYear(params.year)
   const yd = getYearData(year)
+
+  // Compute state-specific plan options to pass to the Coverage Elections card
+  const statePlans = getPlansForState(goals, age ?? 65, state, birthYear ?? undefined, year)
+  const planOptions = statePlans.map((p) => ({ value: p.id as string, label: p.name }))
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
@@ -90,16 +112,7 @@ export default async function MedicarePage({
         </a>
       </div>
 
-      {enrolledMedicare ? (
-        <div className="rounded-lg border border-green-400 bg-green-50 dark:bg-green-950/20 px-5 py-4 mb-8">
-          <p className="text-sm font-semibold text-green-800 dark:text-green-400">✓ You are enrolled in Medicare</p>
-          <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-            Focus on choosing the right supplemental coverage below. During your Medigap Open Enrollment window
-            (first 6 months of Part B), insurers cannot deny coverage or charge more based on health.
-            {collectingSS && ' Since you\u2019re collecting Social Security, you were auto-enrolled in Parts A and B.'}
-          </p>
-        </div>
-      ) : iep ? (
+      {iep && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 mb-8">
           <p className="text-sm font-semibold text-primary">Your Initial Enrollment Period (IEP)</p>
           <p className="text-sm text-muted-foreground mt-1">
@@ -110,7 +123,18 @@ export default async function MedicarePage({
             Enroll in the first 3 months for coverage to begin on your birthday. Waiting until months 4–7 may delay your start date.
           </p>
         </div>
-      ) : null}
+      )}
+
+      {user?.id && (
+        <MedicareEnrollmentCard
+          profileId={user.id}
+          userAge={age}
+          hasSpouse={hasSpouse}
+          spouseAge={spouseAge}
+          partBPremium={yd.partBPremium}
+          initial={{ enrolledPartA, enrolledPartB, spouseEnrolledPartA, spouseEnrolledPartB }}
+        />
+      )}
 
       {/* Enrollment basics */}
       <div className="grid gap-6 md:grid-cols-2 mb-10">
@@ -206,6 +230,15 @@ export default async function MedicarePage({
           </CardContent>
         </Card>
       </div>
+
+      {user?.id && (
+        <MedicarePlanElectionsCard
+          profileId={user.id}
+          hasSpouse={hasSpouse}
+          planOptions={planOptions}
+          initial={{ medicarePlanType, spouseMedicarePlanType, pdpTier, spousePdpTier }}
+        />
+      )}
 
       {/* Plan Finder + Part D */}
       <Accordion type="multiple" defaultValue={['supplemental', 'partd']} className="space-y-4">

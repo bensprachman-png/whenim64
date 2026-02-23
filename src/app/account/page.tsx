@@ -40,12 +40,14 @@ const formSchema = z.object({
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid US zip code'),
   filingStatus: z.string().min(1, 'Please select a filing status'),
+  sex: z.string().optional(),
+  spouseDateOfBirth: z.string().optional(),
+  spouseSex: z.string().optional(),
   goalCatastrophicRisk: z.boolean(),
   goalDoctorFreedom: z.boolean(),
   goalMinPremium: z.boolean(),
   goalMinTotalCost: z.boolean(),
   goalTravelCoverage: z.boolean(),
-  enrolledMedicare: z.boolean(),
   collectingSS: z.boolean(),
 })
 
@@ -59,6 +61,7 @@ export default function AccountPage() {
   const [twoFactorMethod, setTwoFactorMethod] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -85,10 +88,10 @@ export default function AccountPage() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: '', email: '', dateOfBirth: '', zipCode: '', filingStatus: '',
+      name: '', email: '', dateOfBirth: '', zipCode: '', filingStatus: '', sex: '', spouseDateOfBirth: '', spouseSex: '',
       goalCatastrophicRisk: false, goalDoctorFreedom: false,
       goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
-      enrolledMedicare: false, collectingSS: false,
+      collectingSS: false,
     },
   })
 
@@ -109,14 +112,16 @@ export default function AccountPage() {
         dateOfBirth: profile.dateOfBirth,
         zipCode: profile.zipCode,
         filingStatus: profile.filingStatus ?? '',
+        sex: profile.sex ?? '',
+        spouseDateOfBirth: profile.spouseDateOfBirth ?? '',
+        spouseSex: profile.spouseSex ?? '',
         goalCatastrophicRisk: profile.goalCatastrophicRisk ?? false,
         goalDoctorFreedom: profile.goalDoctorFreedom ?? false,
         goalMinPremium: profile.goalMinPremium ?? false,
         goalMinTotalCost: profile.goalMinTotalCost ?? false,
         goalTravelCoverage: profile.goalTravelCoverage ?? false,
-        enrolledMedicare: profile.enrolledMedicare ?? false,
         collectingSS: profile.collectingSS ?? false,
-      })
+      }, { keepDirtyValues: true })
     } else {
       form.reset({
         name: session?.user?.name ?? '',
@@ -124,8 +129,8 @@ export default function AccountPage() {
         dateOfBirth: '', zipCode: '', filingStatus: '',
         goalCatastrophicRisk: false, goalDoctorFreedom: false,
         goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
-        enrolledMedicare: false, collectingSS: false,
-      })
+        collectingSS: false,
+      }, { keepDirtyValues: true })
     }
     setLoading(false)
   }
@@ -135,18 +140,33 @@ export default function AccountPage() {
   }, [form, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onSubmit(values: FormValues) {
+    setSaveError(null)
+    console.log('[Account onSubmit] values:', JSON.stringify(values))
     if (profileId) {
-      await fetch(`/api/users/${profileId}`, {
+      const res = await fetch(`/api/users/${profileId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error('[Account onSubmit] PATCH failed:', res.status, err)
+        setSaveError(`Save failed (${res.status}): ${(err as { error?: string }).error ?? 'Unknown error'}`)
+        return
+      }
+      const saved = await res.json()
+      console.log('[Account onSubmit] PATCH response:', JSON.stringify(saved))
     } else {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSaveError(`Save failed (${res.status}): ${(err as { error?: string }).error ?? 'Unknown error'}`)
+        return
+      }
       const created = await res.json()
       setProfileId(created.id)
     }
@@ -301,6 +321,7 @@ export default function AccountPage() {
 
   const isNew = !profileId
   const twoFAEnabled = session?.user?.twoFactorEnabled
+  const filingStatusValue = form.watch('filingStatus')
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
@@ -368,6 +389,52 @@ export default function AccountPage() {
                 </FormItem>
               )} />
 
+              <FormField control={form.control} name="sex" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Biological Sex</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Used for life expectancy calculations.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              {filingStatusValue === 'married_jointly' && (
+                <>
+                  <FormField control={form.control} name="spouseDateOfBirth" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Spouse Date of Birth</FormLabel>
+                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="spouseSex" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Spouse Biological Sex</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Used for life expectancy calculations.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </>
+              )}
+
               <div className="space-y-3">
                 <div>
                   <p className="text-sm font-medium leading-none">Medicare Supplemental Insurance Priorities</p>
@@ -404,32 +471,6 @@ export default function AccountPage() {
                 <div className="rounded-lg border p-4 space-y-4">
                   <FormField
                     control={form.control}
-                    name="enrolledMedicare"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-normal">Are you currently enrolled in Medicare?</FormLabel>
-                        <FormControl>
-                          <RadioGroup
-                            value={field.value ? 'yes' : 'no'}
-                            onValueChange={(v) => field.onChange(v === 'yes')}
-                            className="flex gap-6 mt-1"
-                          >
-                            <FormItem className="flex items-center gap-2 space-y-0">
-                              <FormControl><RadioGroupItem value="yes" /></FormControl>
-                              <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center gap-2 space-y-0">
-                              <FormControl><RadioGroupItem value="no" /></FormControl>
-                              <FormLabel className="font-normal cursor-pointer">No</FormLabel>
-                            </FormItem>
-                          </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
                     name="collectingSS"
                     render={({ field }) => (
                       <FormItem>
@@ -462,6 +503,7 @@ export default function AccountPage() {
                   {form.formState.isSubmitting ? 'Saving...' : isNew ? 'Save & Continue' : 'Save Changes'}
                 </Button>
                 {saved && <p className="text-sm text-green-600">{isNew ? 'Profile created!' : 'Changes saved!'}</p>}
+                {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               </div>
 
             </form>

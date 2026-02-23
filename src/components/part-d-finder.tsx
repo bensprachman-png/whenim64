@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { DRUG_SCENARIOS, PART_D_PROVIDERS } from '@/lib/part-d-plans'
 import { getYearData } from '@/lib/retirement-data'
 
@@ -333,8 +334,8 @@ export default function PartDFinder({ state, stateName, year }: Props) {
                   .filter((p) => p.premiumGroup === group)
                   .sort((a, b) => a.sortPremium - b.sortPremium || a.name.localeCompare(b.name))
                 return (
-                  <>
-                    <tr key={`group-${group}`} className="border-b border-t bg-muted/20">
+                  <Fragment key={`group-${group}`}>
+                    <tr className="border-b border-t bg-muted/20">
                       <td colSpan={9} className="px-4 py-2">
                         <span className="font-semibold text-xs uppercase tracking-wide text-foreground">{groupMeta.label}</span>
                         <span className="text-xs text-muted-foreground ml-2">{groupMeta.sub}</span>
@@ -370,7 +371,7 @@ export default function PartDFinder({ state, stateName, year }: Props) {
                         <td className="px-3 py-3 tabular-nums align-top text-sm">{oopMaxFmt}</td>
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>

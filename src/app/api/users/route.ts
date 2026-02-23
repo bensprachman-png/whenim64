@@ -32,17 +32,28 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, email, dateOfBirth, zipCode, filingStatus,
+  const { name, email, dateOfBirth, zipCode, filingStatus, sex, spouseDateOfBirth, spouseSex,
     goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
-    enrolledMedicare, collectingSS } = body
+    enrolledMedicare, collectingSS,
+    enrolledPartA, enrolledPartB, spouseEnrolledPartA, spouseEnrolledPartB,
+    medicarePlanType, spouseMedicarePlanType, pdpTier, spousePdpTier } = body
 
   const [profile] = await db
     .insert(profiles)
     .values({
       userId: session.user.id,
-      name, email, dateOfBirth, zipCode, filingStatus,
+      name, email, dateOfBirth, zipCode, filingStatus, sex: sex || null,
+      spouseDateOfBirth: spouseDateOfBirth || null, spouseSex: spouseSex || null,
       goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
       enrolledMedicare, collectingSS,
+      enrolledPartA: enrolledPartA ?? false,
+      enrolledPartB: enrolledPartB ?? false,
+      spouseEnrolledPartA: spouseEnrolledPartA ?? false,
+      spouseEnrolledPartB: spouseEnrolledPartB ?? false,
+      medicarePlanType: medicarePlanType ?? null,
+      spouseMedicarePlanType: spouseMedicarePlanType ?? null,
+      pdpTier: pdpTier ?? null,
+      spousePdpTier: spousePdpTier ?? null,
       createdAt: new Date().toISOString(),
     })
     .returning()

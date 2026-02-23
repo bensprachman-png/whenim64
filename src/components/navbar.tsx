@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { CircleHelp, Settings, LogOut, Shield } from 'lucide-react'
 
 const navItems = [
+  { label: 'Dashboard', href: '/dashboard' },
   { label: 'Social Security', href: '/social-security' },
   { label: 'Medicare', href: '/medicare' },
   { label: 'Taxes', href: '/taxes' },

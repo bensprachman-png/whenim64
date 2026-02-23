@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { db } from '@/db'
-import { profiles } from '@/db/schema'
+import { profiles, taxScenarios } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -10,6 +10,8 @@ import YearSelector from '@/components/year-selector'
 import IrmaaTable from '@/components/irmaa-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
+import { computeProjectionYears } from '@/lib/tax-engine'
+import TaxOptimizer from './_components/TaxOptimizer'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +26,28 @@ export default async function TaxesPage({
   const dob = user?.dateOfBirth ?? null
 
   let rmdYear: number | null = null
+  let birthYear: number | null = null
   if (dob) {
-    const birthYear = new Date(dob + 'T00:00:00').getFullYear()
+    birthYear = new Date(dob + 'T00:00:00').getFullYear()
     rmdYear = birthYear + 73
   }
+
+  const filingStatus = user?.filingStatus ?? 'single'
+  const sex = user?.sex ?? null
+  const defaultSsStartYear = birthYear ? birthYear + 70 : new Date().getFullYear() + 5
+
+  const spouseDob = user?.spouseDateOfBirth ?? null
+  const spouseBirthYear = spouseDob ? new Date(spouseDob + 'T00:00:00').getFullYear() : null
+  const spouseSex = user?.spouseSex ?? null
+
+  const planEndsYear = birthYear
+    ? new Date().getFullYear() + computeProjectionYears(birthYear, spouseBirthYear, new Date().getFullYear(), sex, spouseSex)
+    : undefined
+
+  const [scenarioRow] = await db
+    .select()
+    .from(taxScenarios)
+    .where(eq(taxScenarios.userId, session.user.id))
 
   const params = await searchParams
   const year = resolveYear(params.year)
@@ -35,7 +55,7 @@ export default async function TaxesPage({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <MilestoneTimeline dateOfBirth={dob} highlight={['rmd']} />
+      <MilestoneTimeline dateOfBirth={dob} highlight={['rmd']} planEndsYear={planEndsYear} />
 
       <h1 className="text-3xl font-bold mb-2">Taxes in Retirement</h1>
       <div className="flex items-start justify-between gap-4 mb-6">
@@ -148,7 +168,19 @@ export default async function TaxesPage({
         High-income retirees pay additional surcharges on Medicare Part B and Part D premiums. IRMAA is determined by your Modified Adjusted Gross Income (MAGI) from{' '}
         <strong className="text-foreground">{yd.irmaaBaseYear}</strong> — two years prior to the premium year. Roth conversions and QCDs that reduce your {yd.irmaaBaseYear} MAGI can lower or eliminate these surcharges.
       </p>
-      <IrmaaTable yearData={yd} />
+      <IrmaaTable yearData={yd} filingStatus={filingStatus} />
+
+      <section className="mt-12">
+        <TaxOptimizer
+          initialScenario={scenarioRow ?? null}
+          birthYear={birthYear}
+          defaultFilingStatus={filingStatus}
+          defaultSsStartYear={defaultSsStartYear}
+          sex={sex}
+          spouseBirthYear={spouseBirthYear}
+          spouseSex={spouseSex}
+        />
+      </section>
     </main>
   )
 }

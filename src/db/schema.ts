@@ -75,6 +75,9 @@ export const profiles = sqliteTable('profiles', {
   dateOfBirth: text().notNull(),
   zipCode: text().notNull(),
   filingStatus: text(),
+  sex: text().$type<'male' | 'female'>(),
+  spouseDateOfBirth: text(),
+  spouseSex: text().$type<'male' | 'female'>(),
   goalCatastrophicRisk: int({ mode: 'boolean' }).default(false),
   goalDoctorFreedom: int({ mode: 'boolean' }).default(false),
   goalMinPremium: int({ mode: 'boolean' }).default(false),
@@ -82,6 +85,14 @@ export const profiles = sqliteTable('profiles', {
   goalTravelCoverage: int({ mode: 'boolean' }).default(false),
   enrolledMedicare: int({ mode: 'boolean' }).default(false),
   collectingSS: int({ mode: 'boolean' }).default(false),
+  enrolledPartA: int({ mode: 'boolean' }).default(false),
+  enrolledPartB: int({ mode: 'boolean' }).default(false),
+  spouseEnrolledPartA: int({ mode: 'boolean' }).default(false),
+  spouseEnrolledPartB: int({ mode: 'boolean' }).default(false),
+  medicarePlanType: text(),
+  spouseMedicarePlanType: text(),
+  pdpTier: text(),
+  spousePdpTier: text(),
   createdAt: text().notNull(),
   twoFactorMethod: text(),
 })
@@ -128,4 +139,36 @@ export const contacts = sqliteTable('contacts', {
   message: text().notNull(),
   isRead: int({ mode: 'boolean' }).notNull().default(false),
   createdAt: int({ mode: 'timestamp' }).notNull(),
+})
+
+export const taxScenarios = sqliteTable('taxScenarios', {
+  userId: text().primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  // Income inputs (current-year baseline)
+  w2Income: real().notNull().default(0),
+  interestIncome: real().notNull().default(0),
+  dividendIncome: real().notNull().default(0),
+  capGainsDist: real().notNull().default(0),
+  stcg: real().notNull().default(0),
+  ltcg: real().notNull().default(0),
+  otherIncome: real().notNull().default(0),
+  iraBalance: real().notNull().default(0),
+  iraWithdrawals: real().notNull().default(0),
+  qcds: real().notNull().default(0),
+  rothBalance: real().notNull().default(0),
+  // Projection settings
+  portfolioGrowthPct: real().notNull().default(5),
+  retirementYear: int(),
+  ssStartYear: int(),
+  ssPaymentsPerYear: real().notNull().default(0),
+  filingStatus: text(),
+  // Spouse SS (for MFJ — DOB stored in profiles; these are the SS inputs)
+  spouseSsStartYear: int(),
+  spouseSsPaymentsPerYear: real(),
+  // Projection settings
+  inflationPct: real().notNull().default(2.5),
+  medicareEnrollees: int().notNull().default(1),
+  irmaaTargetTier: int().notNull().default(0),
+  conversionWindow: text().notNull().default('always'),
+  showConversions: int({ mode: 'boolean' }).notNull().default(true),
+  updatedAt: int({ mode: 'timestamp' }).notNull(),
 })

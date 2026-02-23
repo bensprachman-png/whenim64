@@ -37,14 +37,14 @@ function LoginForm() {
       return
     }
 
-    router.push('/account')
+    router.push('/dashboard')
   }
 
   async function handleGoogle() {
     setError('')
     setGoogleLoading(true)
     try {
-      const result = await signIn.social({ provider: 'google', callbackURL: '/account' })
+      const result = await signIn.social({ provider: 'google', callbackURL: '/dashboard' })
       if (result?.error) {
         setError(result.error.message ?? 'Google sign-in failed.')
         setGoogleLoading(false)

@@ -1,4 +1,4 @@
-export type MilestoneId = 'ss-early' | 'medicare' | 'ss-fra' | 'ss-max' | 'rmd'
+export type MilestoneId = 'ss-early' | 'medicare' | 'ss-fra' | 'ss-max' | 'rmd' | 'plan-ends'
 
 export interface Milestone {
   id: MilestoneId
@@ -72,7 +72,7 @@ export function calculateMilestones(dateOfBirth?: string | null): Milestone[] {
     {
       id: 'rmd',
       label: 'RMD Begins',
-      sublabel: '401k / IRA',
+      sublabel: '401k / IRA / QCD',
       age: 73,
       year: getYear(73),
     },

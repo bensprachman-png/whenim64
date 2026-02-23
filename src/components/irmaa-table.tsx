@@ -43,29 +43,23 @@ function BracketTable({ brackets, baseYear }: BracketTableProps) {
   )
 }
 
-export default function IrmaaTable({ yearData }: { yearData: YearData }) {
+export default function IrmaaTable({ yearData, filingStatus }: { yearData: YearData; filingStatus?: string }) {
   const { year, irmaaBaseYear, irmaaSingle, irmaaJoint } = yearData
+  const isJoint = filingStatus === 'married_jointly' || filingStatus === 'joint'
+  const label = isJoint ? 'Married Filing Jointly' : 'Single'
+  const brackets = isJoint ? irmaaJoint : irmaaSingle
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">IRMAA Brackets — {year}</CardTitle>
+        <CardTitle className="text-lg">IRMAA Brackets — {year} — {label}</CardTitle>
       </CardHeader>
-      <CardContent className="text-sm space-y-5">
+      <CardContent className="text-sm space-y-4">
         <p className="text-xs text-muted-foreground">
           Based on <strong className="text-foreground">{irmaaBaseYear}</strong> income — the look-back
           year CMS uses for {year} premiums.
         </p>
-
-        <div>
-          <p className="font-semibold mb-2">Single Filers</p>
-          <BracketTable brackets={irmaaSingle} baseYear={irmaaBaseYear} />
-        </div>
-
-        <div>
-          <p className="font-semibold mb-2">Married Filing Jointly</p>
-          <BracketTable brackets={irmaaJoint} baseYear={irmaaBaseYear} />
-        </div>
+        <BracketTable brackets={brackets} baseYear={irmaaBaseYear} />
       </CardContent>
     </Card>
   )
