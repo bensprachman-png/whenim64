@@ -158,6 +158,7 @@ export default async function DashboardPage() {
 
   let quarterlyFederal = 0, quarterlyState = 0, quarterlyTotal = 0
   let annualFederal = 0, annualState = 0, annualTotal = 0, estimatedMagi = 0
+  let annualConversionAmount = 0, annualConversionTax = 0
 
   if (scenario && birthYear) {
     const filing: FilingStatus = profile?.filingStatus === 'married_jointly' ? 'joint' : 'single'
@@ -201,13 +202,18 @@ export default async function DashboardPage() {
       spousePlanToAge,
     }
 
-    const { baselineRows, optimizedRows } = projectTaxes(taxInputs)
-    const row = (scenario.showConversions ? optimizedRows : baselineRows)[0]
+    const { optimizedRows } = projectTaxes(taxInputs)
+    // Always use the optimized (with-conversions) row — showConversions is a chart
+    // display toggle, not a statement that the user won't execute conversions.
+    // Planned Roth conversions are taxable income and must be reflected in quarterly estimates.
+    const row = optimizedRows[0]
     if (row) {
       annualFederal = row.federalTax + row.ltcgTax
       annualState = row.stateTax
       annualTotal = row.totalTax
       estimatedMagi = row.magi
+      annualConversionAmount = row.rothConversion
+      annualConversionTax = row.conversionTax
       quarterlyFederal = annualFederal / 4
       quarterlyState = annualState / 4
       quarterlyTotal = annualTotal / 4
@@ -485,6 +491,10 @@ export default async function DashboardPage() {
               <div className="border-t pt-3 space-y-3">
                 <p className="text-xs text-muted-foreground">
                   Estimated {currentYear} tax liability — MAGI: <strong className="text-foreground">{fmtDollars(estimatedMagi)}</strong>
+                  {annualConversionAmount > 0 && (
+                    <> · Roth conversion: <strong className="text-foreground">{fmtDollars(annualConversionAmount)}</strong>
+                    {' '}(+<strong className="text-foreground">{fmtDollars(annualConversionTax)}</strong> tax)</>
+                  )}
                   {' · '}Federal: <strong className="text-foreground">{fmtDollars(annualFederal)}</strong>
                   {annualState > 0 && <>{' · '}{stateInfo?.name ?? 'State'}: <strong className="text-foreground">{fmtDollars(annualState)}</strong></>}
                   {' · '}Total: <strong className="text-foreground">{fmtDollars(annualTotal)}</strong>
