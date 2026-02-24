@@ -10,7 +10,7 @@ const navItems = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Social Security', href: '/social-security' },
   { label: 'Medicare', href: '/medicare' },
-  { label: 'Taxes', href: '/taxes' },
+  { label: 'Planning', href: '/planning' },
   { label: 'Portfolio', href: '/portfolio' },
 ]
 

@@ -92,8 +92,10 @@ export default async function DashboardPage() {
   const spouseCurrentAge = spouseBirthYear2 ? currentYear - spouseBirthYear2 : null
   const spouseMedicareYear = spouseBirthYear2 ? spouseBirthYear2 + 65 : null
   const hasSpouseSection = spouseCurrentAge !== null || profile?.filingStatus === 'married_jointly'
+  const planToAge = scenario?.planToAge ?? 0
+  const spousePlanToAge = scenario?.spousePlanToAge ?? 0
   const planEndsYear = birthYear
-    ? currentYear + computeProjectionYears(birthYear, spouseBirthYear, currentYear, sex, spouseSex)
+    ? currentYear + computeProjectionYears(birthYear, spouseBirthYear, currentYear, sex, spouseSex, planToAge, spousePlanToAge)
     : undefined
 
   const firstName = session.user.name?.split(' ')[0] ?? 'there'
@@ -120,7 +122,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Milestone Timeline — highlighted to current age */}
-      <MilestoneTimeline dateOfBirth={dob} planEndsYear={planEndsYear} />
+      <MilestoneTimeline dateOfBirth={dob} planEndsYear={planEndsYear} planToAge={planToAge || null} />
 
       {/* Section grid */}
       <div className="grid gap-6 md:grid-cols-2">
@@ -216,7 +218,7 @@ export default async function DashboardPage() {
                   <li><span className="text-foreground font-medium">IRMAA strategy:</span> {irmaaLabels[scenario.irmaaTargetTier ?? 0]}</li>
                 </ul>
               ) : (
-                <NoPlan page="/taxes" label="Set up in Taxes" />
+                <NoPlan page="/planning" label="Set up in Planning" />
               )}
             </div>
           </CardContent>
@@ -251,7 +253,7 @@ export default async function DashboardPage() {
                   )}
                 </ul>
               ) : (
-                <NoPlan page="/taxes" label="Add SS to Taxes" />
+                <NoPlan page="/planning" label="Add SS to Planning" />
               )}
             </div>
           </CardContent>
@@ -286,7 +288,7 @@ export default async function DashboardPage() {
                   )}
                 </ul>
               ) : (
-                <NoPlan page="/taxes" label="Add IRA to Taxes" />
+                <NoPlan page="/planning" label="Add IRA to Planning" />
               )}
             </div>
           </CardContent>
@@ -326,12 +328,12 @@ export default async function DashboardPage() {
                   )}
                   <li>
                     <Button asChild size="sm" variant="link" className="p-0 h-auto text-primary">
-                      <Link href="/taxes">View full projection →</Link>
+                      <Link href="/planning">View full projection →</Link>
                     </Button>
                   </li>
                 </ul>
               ) : (
-                <NoPlan page="/taxes" label="Create Tax Plan" />
+                <NoPlan page="/planning" label="Create Plan" />
               )}
             </div>
           </CardContent>
@@ -348,7 +350,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <Button asChild>
-            <Link href="/taxes">Get Started</Link>
+            <Link href="/planning">Get Started</Link>
           </Button>
         </div>
       )}

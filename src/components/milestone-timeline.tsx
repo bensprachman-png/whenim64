@@ -7,9 +7,10 @@ interface Props {
   dateOfBirth?: string | null
   highlight?: MilestoneId[]
   planEndsYear?: number
+  planToAge?: number | null
 }
 
-export default function MilestoneTimeline({ dateOfBirth, highlight = [], planEndsYear }: Props) {
+export default function MilestoneTimeline({ dateOfBirth, highlight = [], planEndsYear, planToAge }: Props) {
   const baseMilestones = calculateMilestones(dateOfBirth)
   const currentYear = new Date().getFullYear()
 
@@ -22,7 +23,7 @@ export default function MilestoneTimeline({ dateOfBirth, highlight = [], planEnd
     milestones.push({
       id: 'plan-ends',
       label: 'Plan Ends',
-      sublabel: 'Life expectancy',
+      sublabel: planToAge ? 'Plan override' : 'Life expectancy',
       age: planEndsYear - birthYear,
       year: planEndsYear,
     })

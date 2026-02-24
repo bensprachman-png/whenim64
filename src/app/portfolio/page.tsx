@@ -56,6 +56,7 @@ export default async function PortfolioPage() {
           isConnected={false}
           accounts={[]}
           holdings={[]}
+          isDev={process.env.NODE_ENV === 'development'}
         />
       </main>
     )
@@ -129,6 +130,7 @@ export default async function PortfolioPage() {
         isConnected={true}
         accounts={accounts}
         holdings={holdingsData}
+        isDev={process.env.NODE_ENV === 'development'}
       />
     </main>
   )

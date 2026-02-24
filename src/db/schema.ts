@@ -155,6 +155,8 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   iraWithdrawals: real().notNull().default(0),
   qcds: real().notNull().default(0),
   rothBalance: real().notNull().default(0),
+  taxableBalance: real().notNull().default(0),
+  annualLivingExpenses: real().notNull().default(0),
   // Projection settings
   portfolioGrowthPct: real().notNull().default(5),
   retirementYear: int(),
@@ -170,5 +172,7 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   irmaaTargetTier: int().notNull().default(0),
   conversionWindow: text().notNull().default('always'),
   showConversions: int({ mode: 'boolean' }).notNull().default(true),
+  planToAge: int(),
+  spousePlanToAge: int(),
   updatedAt: int({ mode: 'timestamp' }).notNull(),
 })

@@ -36,13 +36,16 @@ export interface TaxInputs {
   spouseSsStartYear: number
   spouseSsPaymentsPerYear: number
   spouseSex: Sex | null     // spouse's biological sex (for life expectancy)
+  stateTaxRate: number      // effective state income tax rate (0–1); 0 = no state tax
+  planToAge: number         // override primary life expectancy (0 = use SSA)
+  spousePlanToAge: number   // override spouse life expectancy (0 = use SSA)
 }
 
 export interface ScenarioRow {
   year: number; age: number
   w2: number; ss: number; rmd: number; iraWithdrawal: number
   taxableSS: number; magi: number
-  federalTax: number; ltcgTax: number; totalTax: number
+  federalTax: number; ltcgTax: number; stateTax: number; totalTax: number
   effectiveRatePct: number
   irmaaAnnual: number; totalCost: number; iraBalanceEnd: number
   rothConversion: number
@@ -208,8 +211,15 @@ function expectedDeathYear(birthYear: number, startYear: number, sex?: Sex | nul
   return startYear + Math.round(remainingLifeExpectancy(birthYear, startYear, sex))
 }
 
+/** Returns the SSA-table expected death age for a person (current age + remaining LE). */
+export function ssaExpectedAge(birthYear: number, startYear: number, sex?: Sex | null): number {
+  const currentAge = startYear - birthYear
+  return currentAge + Math.round(remainingLifeExpectancy(birthYear, startYear, sex))
+}
+
 /** Returns the number of years to project based on joint life expectancy.
  *  Projects to the later-surviving spouse's expected end year (rounded).
+ *  Pass primaryPlanToAge / spousePlanToAge (> 0) to override the SSA default.
  *  Minimum 10 years. */
 export function computeProjectionYears(
   primaryBirthYear: number,
@@ -217,13 +227,21 @@ export function computeProjectionYears(
   startYear: number,
   primarySex?: Sex | null,
   spouseSex?: Sex | null,
+  primaryPlanToAge = 0,
+  spousePlanToAge = 0,
 ): number {
-  const primaryRemaining = primaryBirthYear > 0
-    ? remainingLifeExpectancy(primaryBirthYear, startYear, primarySex)
-    : 20
-  const spouseRemaining = (spouseBirthYear && spouseBirthYear > 0)
-    ? remainingLifeExpectancy(spouseBirthYear, startYear, spouseSex)
-    : 0
+  const primaryCurrentAge = primaryBirthYear > 0 ? startYear - primaryBirthYear : 0
+  const primaryRemaining = primaryPlanToAge > 0 && primaryBirthYear > 0
+    ? primaryPlanToAge - primaryCurrentAge
+    : primaryBirthYear > 0
+      ? remainingLifeExpectancy(primaryBirthYear, startYear, primarySex)
+      : 20
+  const spouseCurrentAge = spouseBirthYear && spouseBirthYear > 0 ? startYear - spouseBirthYear : 0
+  const spouseRemaining = spousePlanToAge > 0 && spouseBirthYear && spouseBirthYear > 0
+    ? spousePlanToAge - spouseCurrentAge
+    : spouseBirthYear && spouseBirthYear > 0
+      ? remainingLifeExpectancy(spouseBirthYear, startYear, spouseSex)
+      : 0
   const maxRemaining = Math.max(primaryRemaining, spouseRemaining)
   return Math.max(10, Math.round(maxRemaining))
 }
@@ -239,11 +257,11 @@ interface YearBase {
 
 interface YearMetrics {
   taxableSS: number; magi: number
-  federalTax: number; ltcgTax: number; totalTax: number
+  federalTax: number; ltcgTax: number; stateTax: number; totalTax: number
   effectiveRatePct: number; irmaaAnnual: number; totalCost: number
 }
 
-function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2): YearMetrics {
+function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number): YearMetrics {
   const { w2, ss, iraWithdrawal, interestIncome, dividendIncome, capGainsDist, stcg, ltcg, otherIncome, qcds, age, filing } = base
 
   // SS provisional income = all income (excluding SS itself) + half of SS
@@ -263,7 +281,9 @@ function computeYearMetrics(base: YearBase, rothConversion: number, year: number
   const ordinaryTaxable = Math.max(0, taxableIncome - ltcgAmount)
   const federalTax = calcOrdinaryTax(ordinaryTaxable, filing)
   const ltcgTax = calcLtcgTax(ltcgAmount, taxableIncome, filing)
-  const totalTax = federalTax + ltcgTax
+  // State tax: applied to full MAGI (many states use own deductions, but MAGI is a reasonable proxy)
+  const stateTax = magi * stateTaxRate
+  const totalTax = federalTax + ltcgTax + stateTax
   const effectiveRatePct = totalTax / Math.max(1, magi) * 100
 
   let irmaaAnnual = 0
@@ -273,7 +293,7 @@ function computeYearMetrics(base: YearBase, rothConversion: number, year: number
 
   const totalCost = totalTax + irmaaAnnual
 
-  return { taxableSS, magi, federalTax, ltcgTax, totalTax, effectiveRatePct, irmaaAnnual, totalCost }
+  return { taxableSS, magi, federalTax, ltcgTax, stateTax, totalTax, effectiveRatePct, irmaaAnnual, totalCost }
 }
 
 function computeConversionAmount(
@@ -296,19 +316,21 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     stcg, ltcg, otherIncome, iraWithdrawals, qcdPct,
     portfolioGrowthPct, retirementYear, ssStartYear, ssPaymentsPerYear,
     filing, birthYear, startYear, projectionYears, irmaaTargetTier, inflationPct, conversionStopYear, medicareEnrollees,
-    sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex,
+    sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex, stateTaxRate,
+    planToAge, spousePlanToAge,
   } = inputs
 
   let iraBalance = inputs.iraBalance
   let rothBalance = inputs.rothBalance
   const rows: ScenarioRow[] = []
 
-  // Determine first-death year when MFJ with known spouse birth year
+  // Determine first-death year when MFJ with known spouse birth year.
+  // Use plan-to-age overrides when provided, otherwise fall back to SSA tables.
   const primaryDeathYear = (filing === 'joint' && birthYear > 0)
-    ? expectedDeathYear(birthYear, startYear, sex)
+    ? (planToAge > 0 ? birthYear + planToAge : expectedDeathYear(birthYear, startYear, sex))
     : null
   const spouseDeathYear = (filing === 'joint' && spouseBirthYear > 0)
-    ? expectedDeathYear(spouseBirthYear, startYear, spouseSex)
+    ? (spousePlanToAge > 0 ? spouseBirthYear + spousePlanToAge : expectedDeathYear(spouseBirthYear, startYear, spouseSex))
     : null
   const firstDeathYear = (primaryDeathYear && spouseDeathYear)
     ? Math.min(primaryDeathYear, spouseDeathYear)
@@ -370,11 +392,11 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     let metrics: YearMetrics
 
     if (!applyConversions || year >= conversionStopYear) {
-      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees)
+      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
     } else {
-      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees)
+      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
       rothConversion = computeConversionAmount(baseMet.magi, iraBalance, yearFiling, irmaaTargetTier, year, inflationPct)
-      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees)
+      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
       conversionTax = optMet.totalTax - baseMet.totalTax
       metrics = optMet
       iraBalance = Math.max(0, iraBalance - rothConversion)
@@ -390,6 +412,7 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
       magi: metrics.magi,
       federalTax: metrics.federalTax,
       ltcgTax: metrics.ltcgTax,
+      stateTax: metrics.stateTax,
       totalTax: metrics.totalTax,
       effectiveRatePct: metrics.effectiveRatePct,
       irmaaAnnual: metrics.irmaaAnnual,
@@ -421,12 +444,12 @@ export function projectTaxes(inputs: TaxInputs): ProjectionResult {
   const totalRothConverted = optimizedRows.reduce((s, r) => s + r.rothConversion, 0)
   const lifetimeSavings = baselineTotalCost - optimizedTotalCost
 
-  // First-death year for chart annotation
+  // First-death year for chart annotation — same logic as runScenario
   const pDY = (inputs.filing === 'joint' && inputs.birthYear > 0)
-    ? expectedDeathYear(inputs.birthYear, inputs.startYear, inputs.sex)
+    ? (inputs.planToAge > 0 ? inputs.birthYear + inputs.planToAge : expectedDeathYear(inputs.birthYear, inputs.startYear, inputs.sex))
     : null
   const sDY = (inputs.filing === 'joint' && inputs.spouseBirthYear > 0)
-    ? expectedDeathYear(inputs.spouseBirthYear, inputs.startYear, inputs.spouseSex)
+    ? (inputs.spousePlanToAge > 0 ? inputs.spouseBirthYear + inputs.spousePlanToAge : expectedDeathYear(inputs.spouseBirthYear, inputs.startYear, inputs.spouseSex))
     : null
   const firstSpouseDeathYear = (pDY && sDY) ? Math.min(pDY, sDY) : null
 

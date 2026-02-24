@@ -40,6 +40,7 @@ interface Props {
   isConnected: boolean
   accounts: AccountRow[]
   holdings: HoldingRow[]
+  isDev?: boolean
 }
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -86,10 +87,11 @@ const accountFilterFn: FilterFn<HoldingRow> = (row, columnId, filterValue) => {
   return row.getValue<string>(columnId) === filterValue
 }
 
-export default function PortfolioClient({ isConnected, accounts, holdings }: Props) {
+export default function PortfolioClient({ isConnected, accounts, holdings, isDev = false }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [connecting, setConnecting] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
@@ -155,6 +157,24 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
       setError('Network error')
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  const handleDevSeed = async () => {
+    setSeeding(true)
+    setError('')
+    try {
+      const res = await fetch('/api/portfolio/dev-seed', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Seed failed')
+      } else {
+        startTransition(() => router.refresh())
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -359,6 +379,12 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
             <Link2 className="size-4" />
             {connecting ? 'Opening…' : 'Add Brokerage'}
           </Button>
+          {isDev && (
+            <Button onClick={handleDevSeed} disabled={seeding} variant="ghost" size="sm" className="text-muted-foreground gap-1 font-mono text-xs">
+              <RefreshCw className={`size-3 ${seeding ? 'animate-spin' : ''}`} />
+              {seeding ? 'Seeding…' : '[dev] Seed from prod'}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" className="text-muted-foreground gap-1" onClick={() => setConfirmDisconnect(true)}>
             <Link2Off className="size-4" /> Disconnect
           </Button>

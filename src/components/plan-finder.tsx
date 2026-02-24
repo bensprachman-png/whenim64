@@ -199,7 +199,7 @@ export default function PlanFinder({ age, zipCode, goals, birthYear, year, filin
           <p className="text-xs text-muted-foreground">
             ‡ Married filing separately has significantly lower IRMAA income thresholds and steeper
             surcharges than other filing statuses.{' '}
-            <a href="/taxes" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
+            <a href="/planning" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
             for the full bracket table.
           </p>
         ) : (
@@ -215,7 +215,7 @@ export default function PlanFinder({ age, zipCode, goals, birthYear, year, filin
             {firstTier.partDSurcharge > 0 ? ` and +$${partDExtra}/mo to Part D` : ''}.
             {!filingStatus && ' Set your filing status in Account for a personalised threshold.'}
             {' '}
-            <a href="/taxes" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
+            <a href="/planning" className="underline text-primary hover:no-underline">See the Taxes page</a>{' '}
             for the full bracket table.
           </p>
         )}

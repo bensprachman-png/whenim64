@@ -382,7 +382,7 @@ export default function PartDFinder({ state, stateName, year }: Props) {
           <p>
             Premium ranges reflect geographic variation across plan service areas.
             ‡ High-income enrollees may pay IRMAA surcharges of $0–$91/mo on top of their Part D premium.{' '}
-            <a href="/taxes" className="text-primary underline hover:no-underline">
+            <a href="/planning" className="text-primary underline hover:no-underline">
               See the Taxes page
             </a>{' '}
             for the full IRMAA bracket table.

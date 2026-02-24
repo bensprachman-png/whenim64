@@ -24,10 +24,11 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   const {
     w2Income, interestIncome, dividendIncome, capGainsDist,
-    stcg, ltcg, otherIncome, iraBalance, iraWithdrawals, qcds, rothBalance,
+    stcg, ltcg, otherIncome, iraBalance, qcds, rothBalance, taxableBalance, annualLivingExpenses,
     portfolioGrowthPct, retirementYear, ssStartYear,
     ssPaymentsPerYear, spouseSsStartYear, spouseSsPaymentsPerYear,
     inflationPct, medicareEnrollees, irmaaTargetTier, conversionWindow, showConversions,
+    planToAge, spousePlanToAge,
   } = body
 
   const now = new Date()
@@ -41,9 +42,10 @@ export async function PUT(req: NextRequest) {
     ltcg: ltcg ?? 0,
     otherIncome: otherIncome ?? 0,
     iraBalance: iraBalance ?? 0,
-    iraWithdrawals: iraWithdrawals ?? 0,
     qcds: qcds ?? 0,
     rothBalance: rothBalance ?? 0,
+    taxableBalance: taxableBalance ?? 0,
+    annualLivingExpenses: annualLivingExpenses ?? 0,
     portfolioGrowthPct: portfolioGrowthPct ?? 5,
     retirementYear: retirementYear ?? null,
     ssStartYear: ssStartYear ?? null,
@@ -55,6 +57,8 @@ export async function PUT(req: NextRequest) {
     irmaaTargetTier: irmaaTargetTier ?? 0,
     conversionWindow: conversionWindow ?? 'always',
     showConversions: showConversions ?? true,
+    planToAge: planToAge ?? null,
+    spousePlanToAge: spousePlanToAge ?? null,
     updatedAt: now,
   }
 
