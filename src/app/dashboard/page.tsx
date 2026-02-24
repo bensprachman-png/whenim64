@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import { getFullRetirementAge, fraToString } from '@/lib/milestones'
-import { computeProjectionYears, type Sex } from '@/lib/tax-engine'
+import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
+import { getStateInfo } from '@/lib/state-tax'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,59 @@ function fmtK(n: number): string {
   if (Math.abs(n) >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M'
   if (Math.abs(n) >= 1_000) return '$' + (n / 1_000).toFixed(0) + 'k'
   return '$' + n.toFixed(0)
+}
+
+function fmtDollars(n: number): string {
+  return '$' + Math.round(n).toLocaleString('en-US')
+}
+
+// State online payment portal URLs (for quarterly estimated tax payments)
+const STATE_PAYMENT_URLS: Record<string, string> = {
+  AL: 'https://myalabamataxes.alabama.gov/',
+  AR: 'https://atap.arkansas.gov/',
+  AZ: 'https://aztaxes.gov/',
+  CA: 'https://www.ftb.ca.gov/pay/',
+  CO: 'https://tax.colorado.gov/',
+  CT: 'https://myconnect.ct.gov/',
+  DC: 'https://otr.cfo.dc.gov/',
+  DE: 'https://dorweb.revenue.delaware.gov/',
+  GA: 'https://gtc.dor.ga.gov/',
+  HI: 'https://hitax.hawaii.gov/',
+  ID: 'https://tax.idaho.gov/',
+  IN: 'https://www.in.gov/dor/',
+  KS: 'https://www.ksrevenue.gov/',
+  KY: 'https://klp.ky.gov/',
+  LA: 'https://revenue.louisiana.gov/',
+  MA: 'https://masstaxconnect.dor.state.ma.us/',
+  MD: 'https://interactive.marylandtaxes.gov/',
+  ME: 'https://portal.maine.gov/taxes/',
+  MI: 'https://www.michigan.gov/taxes/',
+  MN: 'https://www.revenue.state.mn.us/',
+  MO: 'https://mytax.mo.gov/',
+  MT: 'https://tap.dor.mt.gov/',
+  NC: 'https://www.ncdor.gov/pay',
+  ND: 'https://apps.nd.gov/tax/',
+  NE: 'https://portal.nebraska.gov/nebraskataxes/',
+  NJ: 'https://www.njportal.com/taxation/',
+  NM: 'https://tap.state.nm.us/',
+  NY: 'https://www.tax.ny.gov/pay/ind/',
+  OH: 'https://tax.ohio.gov/',
+  OK: 'https://oktap.tax.ok.gov/',
+  OR: 'https://oregontax.oregon.gov/',
+  RI: 'https://taxportal.ri.gov/',
+  SC: 'https://dor.sc.gov/pay',
+  UT: 'https://tap.utah.gov/',
+  VA: 'https://www.tax.virginia.gov/payments',
+  VT: 'https://myvermont.vermont.gov/',
+  WI: 'https://ww2.revenue.wi.gov/',
+  WV: 'https://mytaxes.wvtax.gov/',
+}
+
+function nextBusinessDay(d: Date): Date {
+  const r = new Date(d)
+  if (r.getDay() === 6) r.setDate(r.getDate() + 2) // Sat → Mon
+  if (r.getDay() === 0) r.setDate(r.getDate() + 1) // Sun → Mon
+  return r
 }
 
 const conversionWindowLabels: Record<string, string> = {
@@ -97,6 +151,77 @@ export default async function DashboardPage() {
   const planEndsYear = birthYear
     ? currentYear + computeProjectionYears(birthYear, spouseBirthYear, currentYear, sex, spouseSex, planToAge, spousePlanToAge)
     : undefined
+
+  // ── Quarterly estimated tax calculation ───────────────────────────────────
+  const stateInfo = getStateInfo(profile?.zipCode ?? '')
+  const statePayUrl = stateInfo ? (STATE_PAYMENT_URLS[stateInfo.code] ?? null) : null
+
+  let quarterlyFederal = 0, quarterlyState = 0, quarterlyTotal = 0
+  let annualFederal = 0, annualState = 0, annualTotal = 0, estimatedMagi = 0
+
+  if (scenario && birthYear) {
+    const filing: FilingStatus = profile?.filingStatus === 'married_jointly' ? 'joint' : 'single'
+    const convWindow = scenario.conversionWindow ?? 'always'
+    const conversionStopYear =
+      convWindow === 'before-ss' ? (scenario.ssStartYear ?? 9999)
+      : convWindow === 'before-rmd' ? (birthYear + 73)
+      : 9999
+
+    const taxInputs: TaxInputs = {
+      w2Income: scenario.w2Income,
+      interestIncome: scenario.interestIncome,
+      dividendIncome: scenario.dividendIncome,
+      capGainsDist: scenario.capGainsDist,
+      stcg: scenario.stcg,
+      ltcg: scenario.ltcg,
+      otherIncome: scenario.otherIncome,
+      iraBalance: scenario.iraBalance,
+      iraWithdrawals: 0,
+      qcdPct: scenario.qcds,
+      rothBalance: scenario.rothBalance,
+      portfolioGrowthPct: scenario.portfolioGrowthPct,
+      retirementYear: scenario.retirementYear ?? currentYear - 1,
+      ssStartYear: scenario.ssStartYear ?? currentYear + 20,
+      ssPaymentsPerYear: scenario.ssPaymentsPerYear,
+      filing,
+      birthYear,
+      startYear: currentYear,
+      projectionYears: 1,
+      irmaaTargetTier: (scenario.irmaaTargetTier ?? 0) as IrmaaTargetTier,
+      inflationPct: scenario.inflationPct,
+      conversionStopYear,
+      medicareEnrollees: (scenario.medicareEnrollees ?? 1) as 1 | 2,
+      sex,
+      spouseBirthYear: spouseBirthYear ?? 0,
+      spouseSsStartYear: scenario.spouseSsStartYear ?? 0,
+      spouseSsPaymentsPerYear: scenario.spouseSsPaymentsPerYear ?? 0,
+      spouseSex,
+      stateTaxRate: stateInfo?.rate ?? 0,
+      planToAge,
+      spousePlanToAge,
+    }
+
+    const { baselineRows, optimizedRows } = projectTaxes(taxInputs)
+    const row = (scenario.showConversions ? optimizedRows : baselineRows)[0]
+    if (row) {
+      annualFederal = row.federalTax + row.ltcgTax
+      annualState = row.stateTax
+      annualTotal = row.totalTax
+      estimatedMagi = row.magi
+      quarterlyFederal = annualFederal / 4
+      quarterlyState = annualState / 4
+      quarterlyTotal = annualTotal / 4
+    }
+  }
+
+  // Due dates for the current tax year (Q4 falls in Jan of the following year)
+  const today = new Date()
+  const dueDates = [
+    { quarter: 'Q1', label: 'Jan – Mar', date: nextBusinessDay(new Date(currentYear, 3, 15)) },
+    { quarter: 'Q2', label: 'Apr – May', date: nextBusinessDay(new Date(currentYear, 5, 15)) },
+    { quarter: 'Q3', label: 'Jun – Aug', date: nextBusinessDay(new Date(currentYear, 8, 15)) },
+    { quarter: 'Q4', label: 'Sep – Dec', date: nextBusinessDay(new Date(currentYear + 1, 0, 15)) },
+  ].map(d => ({ ...d, isPast: d.date < today }))
 
   const firstName = session.user.name?.split(' ')[0] ?? 'there'
   const hasScenario = !!scenario
@@ -340,6 +465,106 @@ export default async function DashboardPage() {
         </Card>
 
       </div>
+
+      {/* Quarterly Estimated Taxes — full width */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Quarterly Estimated Taxes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <p>
+            In retirement your taxes are no longer withheld from a paycheck, so the IRS requires you to
+            pay <strong className="text-foreground">estimated taxes four times a year</strong>. Missing or
+            underpaying a quarter can trigger a penalty. The amounts below are estimated from the income
+            and Roth conversion plan you entered in the{' '}
+            <Link href="/planning" className="text-primary underline hover:no-underline">Planning optimizer</Link>.
+          </p>
+
+          {hasScenario && birthYear ? (
+            <>
+              <div className="border-t pt-3 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Estimated {currentYear} tax liability — MAGI: <strong className="text-foreground">{fmtDollars(estimatedMagi)}</strong>
+                  {' · '}Federal: <strong className="text-foreground">{fmtDollars(annualFederal)}</strong>
+                  {annualState > 0 && <>{' · '}{stateInfo?.name ?? 'State'}: <strong className="text-foreground">{fmtDollars(annualState)}</strong></>}
+                  {' · '}Total: <strong className="text-foreground">{fmtDollars(annualTotal)}</strong>
+                </p>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-1.5 pr-4 font-semibold text-foreground">Quarter</th>
+                        <th className="text-left py-1.5 pr-4 font-semibold text-foreground">Income Period</th>
+                        <th className="text-left py-1.5 pr-4 font-semibold text-foreground">Due Date</th>
+                        <th className="text-right py-1.5 pr-4 font-semibold text-foreground">Federal</th>
+                        {annualState > 0 && <th className="text-right py-1.5 pr-4 font-semibold text-foreground">{stateInfo?.name ?? 'State'}</th>}
+                        <th className="text-right py-1.5 font-semibold text-foreground">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dueDates.map(({ quarter, label, date, isPast }) => (
+                        <tr
+                          key={quarter}
+                          className={`border-b border-border/50 ${isPast ? 'opacity-40' : ''}`}
+                        >
+                          <td className="py-1.5 pr-4 font-medium text-foreground">{quarter}</td>
+                          <td className="py-1.5 pr-4">{label}</td>
+                          <td className="py-1.5 pr-4">
+                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {isPast && <span className="ml-1 text-[10px] italic">past</span>}
+                          </td>
+                          <td className="py-1.5 pr-4 text-right tabular-nums">{fmtDollars(quarterlyFederal)}</td>
+                          {annualState > 0 && <td className="py-1.5 pr-4 text-right tabular-nums">{fmtDollars(quarterlyState)}</td>}
+                          <td className="py-1.5 text-right tabular-nums font-medium text-foreground">{fmtDollars(quarterlyTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex flex-wrap gap-x-5 gap-y-1 pt-1">
+                  <a
+                    href="https://directpay.irs.gov/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline hover:no-underline text-xs"
+                  >
+                    Pay Federal — IRS Direct Pay →
+                  </a>
+                  {statePayUrl && annualState > 0 && (
+                    <a
+                      href={statePayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline text-xs"
+                    >
+                      Pay {stateInfo?.name} State Taxes →
+                    </a>
+                  )}
+                  <a
+                    href="https://www.irs.gov/businesses/small-businesses-self-employed/estimated-taxes"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline hover:no-underline text-xs"
+                  >
+                    IRS Estimated Tax Guide →
+                  </a>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground/60 border-t pt-2">
+                  Estimates are based on your plan inputs and may differ from your actual liability. The IRS safe harbor
+                  rule lets you avoid underpayment penalties by paying at least 100% of last year&apos;s tax (or 110%
+                  if your prior-year AGI exceeded $150,000) — or 90% of this year&apos;s estimated tax, whichever is
+                  less. Consult a tax advisor for your precise amounts.
+                </p>
+              </div>
+            </>
+          ) : (
+            <NoPlan page="/planning" label="Set up in Planning" />
+          )}
+        </CardContent>
+      </Card>
 
       {!hasScenario && (
         <div className="rounded-lg border border-primary/40 bg-primary/5 px-5 py-4 flex items-center justify-between gap-4">
