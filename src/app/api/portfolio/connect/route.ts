@@ -24,7 +24,20 @@ export async function POST() {
     let userSecret: string
 
     if (!conn) {
-      const regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
+      let regRes
+      try {
+        regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
+      } catch (regErr: unknown) {
+        // Code 1010 = user already exists in SnapTrade but not in our DB.
+        // Delete the orphaned SnapTrade user and re-register to get a fresh secret.
+        const code = (regErr as { response?: { data?: { code?: number } } })?.response?.data?.code
+        if (code === 1010) {
+          await snaptrade.authentication.deleteSnapTradeUser({ userId })
+          regRes = await snaptrade.authentication.registerSnapTradeUser({ userId })
+        } else {
+          throw regErr
+        }
+      }
       userSecret = (regRes.data as { userSecret: string }).userSecret
       await db.insert(snaptradeConnections).values({
         userId,
@@ -36,17 +49,21 @@ export async function POST() {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? 'http://localhost:3000'
+    const isLocalhost = appUrl.includes('localhost') || appUrl.includes('127.0.0.1')
     const loginRes = await snaptrade.authentication.loginSnapTradeUser({
       userId,
       userSecret,
-      customRedirect: `${appUrl}/portfolio/connected`,
+      ...(isLocalhost ? {} : { customRedirect: `${appUrl}/portfolio/connected` }),
     })
     const redirectURI = (loginRes.data as { redirectURI: string }).redirectURI
 
     return NextResponse.json({ redirectURI })
-  } catch (err) {
-    console.error('[portfolio/connect POST]', err)
-    const message = err instanceof Error ? err.message : 'Unknown error'
+  } catch (err: unknown) {
+    const body = (err as { response?: { data?: unknown } })?.response?.data
+    console.error('[portfolio/connect POST]', body ?? err)
+    const message = body
+      ? JSON.stringify(body)
+      : err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

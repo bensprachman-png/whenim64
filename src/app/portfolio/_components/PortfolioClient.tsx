@@ -328,10 +328,16 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
             </p>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button onClick={handleSync} disabled={syncing} className="gap-2">
-            <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync Now'}
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={handleSync} disabled={syncing} className="gap-2">
+              <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing…' : 'Sync Now'}
+            </Button>
+            <Button onClick={handleConnect} disabled={connecting} variant="outline" className="gap-2">
+              <Link2 className="size-4" />
+              {connecting ? 'Opening portal…' : 'Add Brokerage'}
+            </Button>
+          </div>
         </div>
         <DisconnectDialog open={confirmDisconnect} onClose={() => setConfirmDisconnect(false)} onConfirm={handleDisconnect} loading={disconnecting} />
       </div>
@@ -348,6 +354,10 @@ export default function PortfolioClient({ isConnected, accounts, holdings }: Pro
           <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm" className="gap-1.5">
             <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing…' : 'Sync Now'}
+          </Button>
+          <Button onClick={handleConnect} disabled={connecting} variant="outline" size="sm" className="gap-1.5">
+            <Link2 className="size-4" />
+            {connecting ? 'Opening…' : 'Add Brokerage'}
           </Button>
           <Button variant="ghost" size="sm" className="text-muted-foreground gap-1" onClick={() => setConfirmDisconnect(true)}>
             <Link2Off className="size-4" /> Disconnect
