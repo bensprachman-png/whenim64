@@ -581,7 +581,7 @@ export default async function DashboardPage() {
           <div>
             <p className="text-sm font-semibold text-primary">Set up your retirement plan</p>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Visit the Tax and Legacy Optimizer to enter your IRA balances, SS details, and conversion strategy — then return here for your personalized summary.
+              Visit the Retirement Optimizer to enter your IRA balances, SS details, and conversion strategy — then return here for your personalized summary.
             </p>
           </div>
           <Button asChild>

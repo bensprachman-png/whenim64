@@ -87,6 +87,8 @@ interface FormState {
   qcds: string
   rothBalance: string
   taxableBalance: string
+  otherAssets: string
+  realEstateValue: string
   annualLivingExpenses: string
   portfolioGrowthPct: string
   retirementYear: string
@@ -120,6 +122,8 @@ function initForm(
     qcds: nz(scenario?.qcds),
     rothBalance: nz(scenario?.rothBalance),
     taxableBalance: nz(scenario?.taxableBalance),
+    otherAssets: nz(scenario?.otherAssets),
+    realEstateValue: nz(scenario?.realEstateValue),
     annualLivingExpenses: nz(scenario?.annualLivingExpenses),
     portfolioGrowthPct: String(scenario?.portfolioGrowthPct ?? 5),
     retirementYear: String(scenario?.retirementYear ?? currentYear + 5),
@@ -144,9 +148,26 @@ interface NumberInputProps {
   prefix?: string
   suffix?: string
   min?: string
+  highlight?: boolean
 }
 
-function NumberInput({ id, label, value, onChange, step = '100', prefix = '$', suffix, min = '0' }: NumberInputProps) {
+function NeedsInputBadge() {
+  return (
+    <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-none shrink-0">
+      needed
+    </span>
+  )
+}
+
+function ReviewBadge() {
+  return (
+    <span className="ml-2 inline-flex items-center rounded-full bg-sky-100 dark:bg-sky-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-400 leading-none shrink-0">
+      review
+    </span>
+  )
+}
+
+function NumberInput({ id, label, value, onChange, step = '100', prefix = '$', suffix, min = '0', highlight = false }: NumberInputProps) {
   return (
     <div className="space-y-1">
       <Label htmlFor={id} className="text-xs text-muted-foreground">{label}</Label>
@@ -162,7 +183,7 @@ function NumberInput({ id, label, value, onChange, step = '100', prefix = '$', s
           value={value}
           placeholder="0"
           onChange={(e) => onChange(e.target.value)}
-          className={prefix ? 'pl-6' : ''}
+          className={[prefix ? 'pl-6' : '', highlight ? 'border-amber-400 ring-1 ring-amber-300/60' : ''].filter(Boolean).join(' ')}
         />
         {suffix && (
           <span className="absolute right-2.5 text-sm text-muted-foreground pointer-events-none">{suffix}</span>
@@ -197,6 +218,14 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
   }
 
   const startYear = new Date().getFullYear()
+
+  // Highlight indicators — show badges on triggers when key fields are missing
+  const assetsNeedInput = brokerageIraTotal === 0 && brokerageRothTotal === 0 && brokerageTaxableTotal === 0
+    && numVal(form.iraBalance) === 0 && numVal(form.rothBalance) === 0 && numVal(form.taxableBalance) === 0
+  const ssNeedsInput = numVal(form.ssPaymentsPerYear) === 0
+  const expensesNeedInput = numVal(form.annualLivingExpenses) === 0
+  const inputsNeedAttention = assetsNeedInput || ssNeedsInput || expensesNeedInput
+  const projectionNeedsReview = initialScenario?.retirementYear == null
 
   // Computed outside memo so UI can reference it for the plan-age dropdowns
   const effectiveSpouseBirthYear = spouseBirthYear ?? (numVal(form.spouseBirthYearOverride) > 0 ? numVal(form.spouseBirthYearOverride) : null)
@@ -403,6 +432,8 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             qcds: numVal(form.qcds),
             rothBalance: numVal(form.rothBalance),
             taxableBalance: numVal(form.taxableBalance),
+            otherAssets: numVal(form.otherAssets),
+            realEstateValue: numVal(form.realEstateValue),
             annualLivingExpenses: numVal(form.annualLivingExpenses),
             portfolioGrowthPct: numVal(form.portfolioGrowthPct),
             retirementYear: numVal(form.retirementYear),
@@ -543,7 +574,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h2 className="text-2xl font-bold">Tax and Legacy Optimizer</h2>
+        <h2 className="text-2xl font-bold">Retirement Optimizer</h2>
         <div className="flex items-center gap-2 text-sm">
           {saveError
             ? <span className="text-destructive">{saveError}</span>
@@ -576,305 +607,340 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
         </div>
       )}
 
-      {/* Input card */}
-      <div>
-        <Accordion type="multiple" defaultValue={['accounts']} className="space-y-2">
+      {/* ── A / B / C Section Groups ── */}
+      <Accordion type="single" defaultValue={inputsNeedAttention ? 'inputs' : projectionNeedsReview ? 'projection' : 'results'} collapsible className="space-y-3">
 
-            {/* ── Section 1: Retirement & Savings Accounts ── */}
-            <AccordionItem value="accounts" className="rounded-lg border overflow-hidden">
-              <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-                Retirement &amp; Savings Accounts
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
-
-                {/* Connected Brokerages */}
-                <div className="rounded-md border bg-muted/30 px-4 py-3 space-y-2 text-sm">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    Connected Brokerages — auto-synced from{' '}
-                    <a href="/portfolio" className="text-primary underline hover:no-underline">Portfolio</a>
-                  </p>
-                  {brokerageIraAccounts.length === 0 && brokerageRothAccounts.length === 0 && brokerageTaxableAccounts.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No brokerage accounts connected yet.{' '}
-                      <a href="/portfolio" className="text-primary underline hover:no-underline">Connect on Portfolio page →</a>
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {brokerageIraAccounts.length > 0 && (
-                        <div>
-                          <p className="font-medium">IRA / Tax-Deferred: <span className="tabular-nums">{fmtK(brokerageIraTotal)}</span></p>
-                          {brokerageIraAccounts.map((a, i) => (
-                            <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
-                          ))}
-                        </div>
-                      )}
-                      {brokerageRothAccounts.length > 0 && (
-                        <div>
-                          <p className="font-medium">Roth IRA: <span className="tabular-nums">{fmtK(brokerageRothTotal)}</span></p>
-                          {brokerageRothAccounts.map((a, i) => (
-                            <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
-                          ))}
-                        </div>
-                      )}
-                      {brokerageTaxableAccounts.length > 0 && (
-                        <div>
-                          <p className="font-medium">Taxable: <span className="tabular-nums">{fmtK(brokerageTaxableTotal)}</span></p>
-                          {brokerageTaxableAccounts.map((a, i) => (
-                            <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Additional manual accounts */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Additional Accounts (not connected)</p>
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                    <div>
-                      <NumberInput id="iraBalance" label="IRA / 401k Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" />
-                      {brokerageIraTotal > 0 && numVal(form.iraBalance) > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageIraTotal + numVal(form.iraBalance))}</p>
-                      )}
-                    </div>
-                    <div>
-                      <NumberInput id="rothBalance" label="Roth IRA Balance" value={form.rothBalance} onChange={set('rothBalance')} step="1000" />
-                      {brokerageRothTotal > 0 && numVal(form.rothBalance) > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageRothTotal + numVal(form.rothBalance))}</p>
-                      )}
-                    </div>
-                    <div>
-                      <NumberInput id="taxableBalance" label="Taxable Savings and Brokerage Balance" value={form.taxableBalance} onChange={set('taxableBalance')} step="1000" />
-                      {brokerageTaxableTotal > 0 && numVal(form.taxableBalance) > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">Total: {fmtK(brokerageTaxableTotal + numVal(form.taxableBalance))}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* ── Section 2: Income ── */}
-            <AccordionItem value="income" className="rounded-lg border overflow-hidden">
-              <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-                Income
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
-
-                {/* Taxable income sources */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Taxable Income Sources</p>
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                    <NumberInput id="w2Income" label="W2 / Salary" value={form.w2Income} onChange={set('w2Income')} />
-                    <NumberInput id="otherIncome" label="Other Income (pension, rental, IRA withdrawals…)" value={form.otherIncome} onChange={set('otherIncome')} />
-                    <NumberInput id="interestIncome" label="Interest Income" value={form.interestIncome} onChange={set('interestIncome')} />
-                    <NumberInput id="dividendIncome" label="Qualified Dividends" value={form.dividendIncome} onChange={set('dividendIncome')} />
-                    <NumberInput id="capGainsDist" label="Cap Gains Distributions" value={form.capGainsDist} onChange={set('capGainsDist')} />
-                    <NumberInput id="stcg" label="Short-Term Cap Gains" value={form.stcg} onChange={set('stcg')} />
-                    <NumberInput id="ltcg" label="Long-Term Cap Gains" value={form.ltcg} onChange={set('ltcg')} />
-                  </div>
-                </div>
-
-                {/* Social Security */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Social Security</p>
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                    <NumberInput id="ssStartYear" label="Your SS Start Year" value={form.ssStartYear} onChange={set('ssStartYear')} step="1" prefix="" min="2020" />
-                    <NumberInput id="ssPaymentsPerYear" label="Your SS Amount / Year" value={form.ssPaymentsPerYear} onChange={set('ssPaymentsPerYear')} />
-                    {isJoint && (
-                      <>
-                        <NumberInput id="spouseSsStartYear" label="Spouse SS Start Year" value={form.spouseSsStartYear} onChange={set('spouseSsStartYear')} step="1" prefix="" min="2020" />
-                        <NumberInput id="spouseSsPaymentsPerYear" label="Spouse SS Amount / Year" value={form.spouseSsPaymentsPerYear} onChange={set('spouseSsPaymentsPerYear')} />
-                        {!spouseBirthYear && (
-                          <div className="sm:col-span-2 md:col-span-3">
-                            <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                              <p className="text-xs text-amber-800 dark:text-amber-400 flex-1 min-w-0">
-                                <strong>Spouse birth year missing</strong> — needed to model the first-death transition and joint life expectancy.{' '}
-                                <a href="/account" className="underline hover:no-underline">Save it in Account</a> or enter below for this session only.
-                              </p>
-                              <div className="w-36 shrink-0">
-                                <NumberInput id="spouseBirthYearOverride" label="Spouse Birth Year" value={form.spouseBirthYearOverride} onChange={set('spouseBirthYearOverride')} step="1" prefix="" min="1930" />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* ── Section 3: Expenses ── */}
-            <AccordionItem value="expenses" className="rounded-lg border overflow-hidden">
-              <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-                Expenses
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
-
-                {/* Medicare / IRMAA */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Medicare &amp; IRMAA</p>
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="medicareEnrollees" className="text-xs text-muted-foreground">Medicare Enrollees</Label>
-                      <Select
-                        value={form.medicareEnrollees}
-                        onValueChange={(v) => setForm((f) => ({ ...f, medicareEnrollees: v as '1' | '2' }))}
-                      >
-                        <SelectTrigger id="medicareEnrollees" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 — single or one spouse on Medicare</SelectItem>
-                          <SelectItem value="2">2 — both spouses on Medicare</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-1">IRMAA is paid per person — joint filers often pay it twice.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Living Expenses */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Living Expenses</p>
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                    <div>
-                      <NumberInput id="annualLivingExpenses" label="Annual Living Expenses" value={form.annualLivingExpenses} onChange={set('annualLivingExpenses')} step="1000" />
-                      <p className="text-xs text-muted-foreground mt-1">Used for future taxable-account drawdown modeling.</p>
-                    </div>
-                  </div>
-                </div>
-
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* ── Section 4: Projection Settings ── */}
-            <AccordionItem value="projection" className="rounded-lg border !border-b overflow-hidden">
-              <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-                Projection Settings
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pt-4 pb-5">
-                <div className="flex items-center justify-end mb-3">
-                  <p className="text-xs text-muted-foreground">
-                    Filing status: <strong className="text-foreground">{isJoint ? 'Married Filing Jointly' : 'Single'}</strong>
-                    {' '}— <a href="/account" className="text-primary underline hover:no-underline">change in Account</a>
-                  </p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                  <div>
-                    <NumberInput id="retirementYear" label="Retirement Year" value={form.retirementYear} onChange={set('retirementYear')} step="1" prefix="" min="2020" />
-                    <p className="text-xs text-muted-foreground mt-1">W2 / salary income stops after this year. No effect if W2 is $0.</p>
-                  </div>
-                  <NumberInput id="portfolioGrowthPct" label="Portfolio Growth %" value={form.portfolioGrowthPct} onChange={set('portfolioGrowthPct')} step="0.1" prefix="" suffix="%" />
-                  <NumberInput id="inflationPct" label="Inflation / SS COLA %" value={form.inflationPct} onChange={set('inflationPct')} step="0.1" prefix="" suffix="%" />
-                  <NumberInput id="qcds" label="QCDs (% of RMD, age 73+)" value={form.qcds} onChange={set('qcds')} step="1" prefix="" suffix="%" min="0" />
-                  <div className="space-y-1">
-                    <Label htmlFor="irmaaTargetTier" className="text-xs text-muted-foreground">Conversion Aggressiveness</Label>
-                    <Select
-                      value={String(irmaaTargetTier)}
-                      onValueChange={(v) => setIrmaaTargetTier(Number(v) as IrmaaTargetTier)}
-                    >
-                      <SelectTrigger id="irmaaTargetTier" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">Conservative — no IRMAA surcharge</SelectItem>
-                        <SelectItem value="1">Moderate — allow Tier 1 IRMAA</SelectItem>
-                        <SelectItem value="2">Aggressive — allow Tier 2 IRMAA</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">Higher tiers convert more now, reducing future RMDs.</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="conversionWindow" className="text-xs text-muted-foreground">Conversion Window</Label>
-                    <Select
-                      value={conversionWindow}
-                      onValueChange={(v) => setConversionWindow(v as 'always' | 'before-ss' | 'before-rmd')}
-                    >
-                      <SelectTrigger id="conversionWindow" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="always">Drain IRA</SelectItem>
-                        <SelectItem value="before-ss">Tax valley — before SS starts</SelectItem>
-                        <SelectItem value="before-rmd">Before RMDs (age 73)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">Limit conversions to the low-income window before SS or RMDs.</p>
-                  </div>
-
-                  {/* Plan-to-age overrides */}
-                  {birthYear && (() => {
-                    const currentAge = startYear - birthYear
-                    const ssaAge = ssaExpectedAge(birthYear, startYear, sex)
-                    const minAge = currentAge + 5
-                    return (
-                      <div className="space-y-1">
-                        <Label htmlFor="planToAge" className="text-xs text-muted-foreground">Plan to Age — You</Label>
-                        <Select
-                          value={form.planToAge || 'ssa'}
-                          onValueChange={(v) => set('planToAge')(v === 'ssa' ? '' : v)}
-                        >
-                          <SelectTrigger id="planToAge" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ssa">SSA default (~{ssaAge})</SelectItem>
-                            {Array.from({ length: 110 - minAge + 1 }, (_, i) => minAge + i).map(age => (
-                              <SelectItem key={age} value={String(age)}>{age}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-1">Override SSA life expectancy for planning purposes.</p>
-                      </div>
-                    )
-                  })()}
-
-                  {isJoint && effectiveSpouseBirthYear && (() => {
-                    const spouseCurrentAge = startYear - effectiveSpouseBirthYear
-                    const ssaSpouseAge = ssaExpectedAge(effectiveSpouseBirthYear, startYear, spouseSex)
-                    const minAge = spouseCurrentAge + 5
-                    return (
-                      <div className="space-y-1">
-                        <Label htmlFor="spousePlanToAge" className="text-xs text-muted-foreground">Plan to Age — Spouse</Label>
-                        <Select
-                          value={form.spousePlanToAge || 'ssa'}
-                          onValueChange={(v) => set('spousePlanToAge')(v === 'ssa' ? '' : v)}
-                        >
-                          <SelectTrigger id="spousePlanToAge" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ssa">SSA default (~{ssaSpouseAge})</SelectItem>
-                            {Array.from({ length: 110 - minAge + 1 }, (_, i) => minAge + i).map(age => (
-                              <SelectItem key={age} value={String(age)}>{age}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-1">Override SSA life expectancy for planning purposes.</p>
-                      </div>
-                    )
-                  })()}
-
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-          </Accordion>
-      </div>
-
-      <Accordion type="multiple" defaultValue={['living', 'tax', 'legacy']} className="space-y-2">
-
-        {/* ── Section 1: Living Expenses & Taxable Account ── */}
-        <AccordionItem value="living" className="rounded-lg border overflow-hidden">
-          <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-            Living Expenses &amp; Taxable Account
+        {/* ── A: Inputs ── */}
+        <AccordionItem value="inputs" className="rounded-lg border overflow-hidden">
+          <AccordionTrigger className="text-sm font-bold px-4 py-3 bg-muted/60 hover:bg-muted/80 hover:no-underline rounded-none items-center data-[state=open]:border-b">
+            <span className="flex items-center">Inputs{inputsNeedAttention && <NeedsInputBadge />}</span>
           </AccordionTrigger>
-          <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
+          <AccordionContent className="pb-0">
+            <div className="p-4">
+              <Accordion type="single" defaultValue={assetsNeedInput ? 'assets' : ssNeedsInput ? 'ss' : expensesNeedInput ? 'expenses' : 'assets'} collapsible className="space-y-2">
+
+                {/* ── 1: Assets ── */}
+                <AccordionItem value="assets" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    <span className="flex items-center">Assets{assetsNeedInput && <NeedsInputBadge />}</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
+
+                    {/* Connected Brokerages */}
+                    <div className="rounded-md border bg-muted/30 px-4 py-3 space-y-2 text-sm">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Connected Brokerages — auto-synced from{' '}
+                        <a href="/portfolio" className="text-primary underline hover:no-underline">Portfolio</a>
+                      </p>
+                      {brokerageIraAccounts.length === 0 && brokerageRothAccounts.length === 0 && brokerageTaxableAccounts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No brokerage accounts connected yet.{' '}
+                          <a href="/portfolio" className="text-primary underline hover:no-underline">Connect on Portfolio page →</a>
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {brokerageIraAccounts.length > 0 && (
+                            <div>
+                              <p className="font-medium">IRA / Tax-Deferred: <span className="tabular-nums">{fmtK(brokerageIraTotal)}</span></p>
+                              {brokerageIraAccounts.map((a, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
+                              ))}
+                            </div>
+                          )}
+                          {brokerageRothAccounts.length > 0 && (
+                            <div>
+                              <p className="font-medium">Roth IRA: <span className="tabular-nums">{fmtK(brokerageRothTotal)}</span></p>
+                              {brokerageRothAccounts.map((a, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
+                              ))}
+                            </div>
+                          )}
+                          {brokerageTaxableAccounts.length > 0 && (
+                            <div>
+                              <p className="font-medium">Taxable: <span className="tabular-nums">{fmtK(brokerageTaxableTotal)}</span></p>
+                              {brokerageTaxableAccounts.map((a, i) => (
+                                <p key={i} className="text-xs text-muted-foreground pl-3">· {a.name}: {a.balance != null ? fmtK(a.balance) : 'Syncing…'}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Additional manual accounts */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Additional Accounts (not connected)</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <div>
+                          <NumberInput id="iraBalance" label="IRA / 401k Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" highlight={assetsNeedInput} />
+                          {brokerageIraTotal > 0 && numVal(form.iraBalance) > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageIraTotal + numVal(form.iraBalance))}</p>
+                          )}
+                        </div>
+                        <div>
+                          <NumberInput id="rothBalance" label="Roth IRA Balance" value={form.rothBalance} onChange={set('rothBalance')} step="1000" highlight={assetsNeedInput} />
+                          {brokerageRothTotal > 0 && numVal(form.rothBalance) > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageRothTotal + numVal(form.rothBalance))}</p>
+                          )}
+                        </div>
+                        <div>
+                          <NumberInput id="taxableBalance" label="Taxable Savings and Brokerage Balance" value={form.taxableBalance} onChange={set('taxableBalance')} step="1000" highlight={assetsNeedInput} />
+                          {brokerageTaxableTotal > 0 && numVal(form.taxableBalance) > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">Total: {fmtK(brokerageTaxableTotal + numVal(form.taxableBalance))}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Other & Real Estate */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Other Assets (informational — not used in projection)</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <div>
+                          <NumberInput id="otherAssets" label="Other Savings / Investments" value={form.otherAssets} onChange={set('otherAssets')} step="1000" />
+                          <p className="text-xs text-muted-foreground mt-1">CDs, annuities, savings accounts, etc.</p>
+                        </div>
+                        <div>
+                          <NumberInput id="realEstateValue" label="Real Estate Value" value={form.realEstateValue} onChange={set('realEstateValue')} step="1000" />
+                          <p className="text-xs text-muted-foreground mt-1">Estimated market value of real estate holdings.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* ── 2: Income ── */}
+                <AccordionItem value="income" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    Income
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Taxable Income Sources</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <NumberInput id="w2Income" label="W2 / Salary" value={form.w2Income} onChange={set('w2Income')} />
+                        <NumberInput id="otherIncome" label="Other Income (pension, rental, IRA withdrawals…)" value={form.otherIncome} onChange={set('otherIncome')} />
+                        <NumberInput id="interestIncome" label="Interest Income" value={form.interestIncome} onChange={set('interestIncome')} />
+                        <NumberInput id="dividendIncome" label="Qualified Dividends" value={form.dividendIncome} onChange={set('dividendIncome')} />
+                        <NumberInput id="capGainsDist" label="Cap Gains Distributions" value={form.capGainsDist} onChange={set('capGainsDist')} />
+                        <NumberInput id="stcg" label="Short-Term Cap Gains" value={form.stcg} onChange={set('stcg')} />
+                        <NumberInput id="ltcg" label="Long-Term Cap Gains" value={form.ltcg} onChange={set('ltcg')} />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* ── 3: Social Security ── */}
+                <AccordionItem value="ss" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    <span className="flex items-center">Social Security{ssNeedsInput && <NeedsInputBadge />}</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
+                    <div>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <NumberInput id="ssStartYear" label="Your SS Start Year" value={form.ssStartYear} onChange={set('ssStartYear')} step="1" prefix="" min="2020" />
+                        <NumberInput id="ssPaymentsPerYear" label="Your SS Amount / Year" value={form.ssPaymentsPerYear} onChange={set('ssPaymentsPerYear')} highlight={ssNeedsInput} />
+                        {isJoint && (
+                          <>
+                            <NumberInput id="spouseSsStartYear" label="Spouse SS Start Year" value={form.spouseSsStartYear} onChange={set('spouseSsStartYear')} step="1" prefix="" min="2020" />
+                            <NumberInput id="spouseSsPaymentsPerYear" label="Spouse SS Amount / Year" value={form.spouseSsPaymentsPerYear} onChange={set('spouseSsPaymentsPerYear')} />
+                            {!spouseBirthYear && (
+                              <div className="sm:col-span-2 md:col-span-3">
+                                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                  <p className="text-xs text-amber-800 dark:text-amber-400 flex-1 min-w-0">
+                                    <strong>Spouse birth year missing</strong> — needed to model the first-death transition and joint life expectancy.{' '}
+                                    <a href="/account" className="underline hover:no-underline">Save it in Account</a> or enter below for this session only.
+                                  </p>
+                                  <div className="w-36 shrink-0">
+                                    <NumberInput id="spouseBirthYearOverride" label="Spouse Birth Year" value={form.spouseBirthYearOverride} onChange={set('spouseBirthYearOverride')} step="1" prefix="" min="1930" />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* ── 4: Expenses ── */}
+                <AccordionItem value="expenses" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    <span className="flex items-center">Expenses{expensesNeedInput && <NeedsInputBadge />}</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
+
+                    {/* Medicare / IRMAA */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Medicare &amp; IRMAA</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="medicareEnrollees" className="text-xs text-muted-foreground">Medicare Enrollees</Label>
+                          <Select
+                            value={form.medicareEnrollees}
+                            onValueChange={(v) => setForm((f) => ({ ...f, medicareEnrollees: v as '1' | '2' }))}
+                          >
+                            <SelectTrigger id="medicareEnrollees" className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1 — single or one spouse on Medicare</SelectItem>
+                              <SelectItem value="2">2 — both spouses on Medicare</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">IRMAA is paid per person — joint filers often pay it twice.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Living Expenses */}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Living Expenses</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <div>
+                          <NumberInput id="annualLivingExpenses" label="Annual Living Expenses" value={form.annualLivingExpenses} onChange={set('annualLivingExpenses')} step="1000" highlight={expensesNeedInput} />
+                          <p className="text-xs text-muted-foreground mt-1">Used for future taxable-account drawdown modeling.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </AccordionContent>
+                </AccordionItem>
+
+              </Accordion>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* ── B: Projection Settings ── */}
+        <AccordionItem value="projection" className="rounded-lg border overflow-hidden">
+          <AccordionTrigger className="text-sm font-bold px-4 py-3 bg-muted/60 hover:bg-muted/80 hover:no-underline rounded-none items-center data-[state=open]:border-b">
+            <span className="flex items-center">Projection Settings{projectionNeedsReview && <ReviewBadge />}</span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pt-4 pb-5">
+            <div className="flex items-center justify-end mb-3">
+              <p className="text-xs text-muted-foreground">
+                Filing status: <strong className="text-foreground">{isJoint ? 'Married Filing Jointly' : 'Single'}</strong>
+                {' '}— <a href="/account" className="text-primary underline hover:no-underline">change in Account</a>
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+              <div>
+                <NumberInput id="retirementYear" label="Retirement Year" value={form.retirementYear} onChange={set('retirementYear')} step="1" prefix="" min="2020" />
+                <p className="text-xs text-muted-foreground mt-1">W2 / salary income stops after this year. No effect if W2 is $0.</p>
+              </div>
+              <NumberInput id="portfolioGrowthPct" label="Portfolio Growth %" value={form.portfolioGrowthPct} onChange={set('portfolioGrowthPct')} step="0.1" prefix="" suffix="%" />
+              <NumberInput id="inflationPct" label="Inflation / SS COLA %" value={form.inflationPct} onChange={set('inflationPct')} step="0.1" prefix="" suffix="%" />
+              <NumberInput id="qcds" label="QCDs (% of RMD, age 73+)" value={form.qcds} onChange={set('qcds')} step="1" prefix="" suffix="%" min="0" />
+              <div className="space-y-1">
+                <Label htmlFor="irmaaTargetTier" className="text-xs text-muted-foreground">Conversion Aggressiveness</Label>
+                <Select
+                  value={String(irmaaTargetTier)}
+                  onValueChange={(v) => setIrmaaTargetTier(Number(v) as IrmaaTargetTier)}
+                >
+                  <SelectTrigger id="irmaaTargetTier" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Conservative — no IRMAA surcharge</SelectItem>
+                    <SelectItem value="1">Moderate — allow Tier 1 IRMAA</SelectItem>
+                    <SelectItem value="2">Aggressive — allow Tier 2 IRMAA</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Higher tiers convert more now, reducing future RMDs.</p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="conversionWindow" className="text-xs text-muted-foreground">Conversion Window</Label>
+                <Select
+                  value={conversionWindow}
+                  onValueChange={(v) => setConversionWindow(v as 'always' | 'before-ss' | 'before-rmd')}
+                >
+                  <SelectTrigger id="conversionWindow" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="always">Drain IRA</SelectItem>
+                    <SelectItem value="before-ss">Tax valley — before SS starts</SelectItem>
+                    <SelectItem value="before-rmd">Before RMDs (age 73)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Limit conversions to the low-income window before SS or RMDs.</p>
+              </div>
+
+              {/* Plan-to-age overrides */}
+              {birthYear && (() => {
+                const currentAge = startYear - birthYear
+                const ssaAge = ssaExpectedAge(birthYear, startYear, sex)
+                const minAge = currentAge + 5
+                return (
+                  <div className="space-y-1">
+                    <Label htmlFor="planToAge" className="text-xs text-muted-foreground">Plan to Age — You</Label>
+                    <Select
+                      value={form.planToAge || 'ssa'}
+                      onValueChange={(v) => set('planToAge')(v === 'ssa' ? '' : v)}
+                    >
+                      <SelectTrigger id="planToAge" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ssa">SSA default (~{ssaAge})</SelectItem>
+                        {Array.from({ length: 110 - minAge + 1 }, (_, i) => minAge + i).map(age => (
+                          <SelectItem key={age} value={String(age)}>{age}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">Override SSA life expectancy for planning purposes.</p>
+                  </div>
+                )
+              })()}
+
+              {isJoint && effectiveSpouseBirthYear && (() => {
+                const spouseCurrentAge = startYear - effectiveSpouseBirthYear
+                const ssaSpouseAge = ssaExpectedAge(effectiveSpouseBirthYear, startYear, spouseSex)
+                const minAge = spouseCurrentAge + 5
+                return (
+                  <div className="space-y-1">
+                    <Label htmlFor="spousePlanToAge" className="text-xs text-muted-foreground">Plan to Age — Spouse</Label>
+                    <Select
+                      value={form.spousePlanToAge || 'ssa'}
+                      onValueChange={(v) => set('spousePlanToAge')(v === 'ssa' ? '' : v)}
+                    >
+                      <SelectTrigger id="spousePlanToAge" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ssa">SSA default (~{ssaSpouseAge})</SelectItem>
+                        {Array.from({ length: 110 - minAge + 1 }, (_, i) => minAge + i).map(age => (
+                          <SelectItem key={age} value={String(age)}>{age}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">Override SSA life expectancy for planning purposes.</p>
+                  </div>
+                )
+              })()}
+
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* ── C: Results ── */}
+        <AccordionItem value="results" className="rounded-lg border overflow-hidden">
+          <AccordionTrigger className="text-sm font-bold px-4 py-3 bg-muted/60 hover:bg-muted/80 hover:no-underline rounded-none items-center data-[state=open]:border-b">
+            Results
+          </AccordionTrigger>
+          <AccordionContent className="pb-0">
+            <div className="p-4">
+              <Accordion type="single" defaultValue="living" collapsible className="space-y-2">
+
+                {/* ── Living Expenses & Taxable Account ── */}
+                <AccordionItem value="living" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    Living Expenses &amp; Taxable Account
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
 
         <Card>
           <CardHeader className="pb-3">
@@ -997,15 +1063,15 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             Enter a starting taxable balance or annual living expenses to see the projection chart.
           </div>
         )}
-          </AccordionContent>
-        </AccordionItem>
+                  </AccordionContent>
+                </AccordionItem>
 
-        {/* ── Section 2: Tax & IRMAA Cost ── */}
-        <AccordionItem value="tax" className="rounded-lg border overflow-hidden">
-          <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-            Tax &amp; IRMAA Cost over Lifetime
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
+                {/* ── Tax & IRMAA Cost ── */}
+                <AccordionItem value="tax" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    Tax &amp; IRMAA Cost over Lifetime
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
 
         {/* Lifetime Summary card */}
         <Card>
@@ -1303,15 +1369,15 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             )}
           </div>
 
-          </AccordionContent>
-        </AccordionItem>
+                  </AccordionContent>
+                </AccordionItem>
 
-        {/* ── Section 3: Wealth & Legacy ── */}
-        <AccordionItem value="legacy" className="rounded-lg border !border-b overflow-hidden">
-          <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-            Wealth &amp; Legacy
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
+                {/* ── Wealth & Legacy ── */}
+                <AccordionItem value="legacy" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    Wealth &amp; Legacy
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
 
         <Card>
           <CardHeader className="pb-3">
@@ -1369,6 +1435,11 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             </p>
           </CardContent>
         </Card>
+                  </AccordionContent>
+                </AccordionItem>
+
+              </Accordion>
+            </div>
           </AccordionContent>
         </AccordionItem>
 

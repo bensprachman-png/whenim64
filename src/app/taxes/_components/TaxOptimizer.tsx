@@ -543,7 +543,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h2 className="text-2xl font-bold">Tax and Legacy Optimizer</h2>
+        <h2 className="text-2xl font-bold">Retirement Optimizer</h2>
         <div className="flex items-center gap-2 text-sm">
           {saveError
             ? <span className="text-destructive">{saveError}</span>

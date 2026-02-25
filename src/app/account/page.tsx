@@ -170,6 +170,12 @@ export default function AccountPage() {
       const created = await res.json()
       setProfileId(created.id)
     }
+
+    // Keep the auth user record in sync so the navbar reflects the updated name.
+    if (values.name !== session?.user?.name) {
+      await authClient.updateUser({ name: values.name })
+    }
+
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }

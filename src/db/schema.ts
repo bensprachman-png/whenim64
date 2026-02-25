@@ -156,6 +156,8 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   qcds: real().notNull().default(0),
   rothBalance: real().notNull().default(0),
   taxableBalance: real().notNull().default(0),
+  otherAssets: real().notNull().default(0),
+  realEstateValue: real().notNull().default(0),
   annualLivingExpenses: real().notNull().default(0),
   // Projection settings
   portfolioGrowthPct: real().notNull().default(5),

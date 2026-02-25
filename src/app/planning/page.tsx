@@ -10,6 +10,7 @@ import MilestoneTimeline from '@/components/milestone-timeline'
 import YearSelector from '@/components/year-selector'
 import IrmaaTable from '@/components/irmaa-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 import { computeProjectionYears } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
@@ -91,14 +92,17 @@ export default async function PlanningPage({
       </p>
 
       {/* ── Planning Pillars ─────────────────────────────────────────────── */}
-      <div className="space-y-0 mb-12 rounded-lg border overflow-hidden divide-y">
+      <Accordion type="single" defaultValue="pillar-1" collapsible className="mb-12 rounded-lg border overflow-hidden divide-y">
 
         {/* 1. Fund Your Retirement Lifestyle */}
-        <div>
-          <div className="px-5 py-4 bg-muted/30 flex items-center gap-3">
-            <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">1</span>
-            <h2 className="text-base font-semibold">Fund Your Retirement Lifestyle</h2>
-          </div>
+        <AccordionItem value="pillar-1" className="border-0">
+          <AccordionTrigger className="px-5 py-4 bg-muted/30 hover:no-underline hover:bg-muted/60 items-center data-[state=open]:border-b">
+            <div className="flex items-center gap-3">
+              <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">1</span>
+              <span className="text-base font-semibold">Fund Your Retirement Lifestyle</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-3">
             <p>
               Ensure you have sufficient resources to cover your family&apos;s living expenses throughout the entire plan period — not just the early, healthy years, but all the way to the end of the projection.
@@ -113,14 +117,18 @@ export default async function PlanningPage({
               Enter your annual living expenses, account balances, and Social Security estimates in the optimizer below to project your coverage over the full plan period.
             </p>
           </div>
-        </div>
+          </AccordionContent>
+        </AccordionItem>
 
         {/* 2. Minimize Taxes & Medicare Costs */}
-        <div>
-          <div className="px-5 py-4 bg-muted/30 flex items-center gap-3">
-            <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">2</span>
-            <h2 className="text-base font-semibold">Minimize Taxes &amp; Medicare Costs</h2>
-          </div>
+        <AccordionItem value="pillar-2" className="border-0">
+          <AccordionTrigger className="px-5 py-4 bg-muted/30 hover:no-underline hover:bg-muted/60 items-center data-[state=open]:border-b">
+            <div className="flex items-center gap-3">
+              <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">2</span>
+              <span className="text-base font-semibold">Minimize Taxes &amp; Medicare Costs</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-6">
             <p>
               Strategic tax planning — especially around Required Minimum Distributions and Roth conversions — can save you tens of thousands of dollars over a lifetime. The window between retirement and age 73 is your best opportunity to act.
@@ -238,14 +246,18 @@ export default async function PlanningPage({
               <IrmaaTable yearData={yd} filingStatus={filingStatus} />
             </div>
           </div>
-        </div>
+          </AccordionContent>
+        </AccordionItem>
 
         {/* 3. Pass Wealth to Your Heirs */}
-        <div>
-          <div className="px-5 py-4 bg-muted/30 flex items-center gap-3">
-            <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">3</span>
-            <h2 className="text-base font-semibold">Pass Wealth to Your Heirs</h2>
-          </div>
+        <AccordionItem value="pillar-3" className="border-0">
+          <AccordionTrigger className="px-5 py-4 bg-muted/30 hover:no-underline hover:bg-muted/60 items-center data-[state=open]:border-b">
+            <div className="flex items-center gap-3">
+              <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">3</span>
+              <span className="text-base font-semibold">Pass Wealth to Your Heirs</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-3">
             <p>
               The account types you leave behind have a profound impact on your heirs&apos; tax burden. Shifting wealth from taxable IRA balances toward Roth is one of the most effective gifts you can make.
@@ -260,14 +272,18 @@ export default async function PlanningPage({
               The Wealth &amp; Legacy section of the optimizer below shows your projected final balances in each account type and estimates your heirs&apos; annual inherited IRA withdrawals.
             </p>
           </div>
-        </div>
+          </AccordionContent>
+        </AccordionItem>
 
         {/* 4. Charitable Giving */}
-        <div>
-          <div className="px-5 py-4 bg-muted/30 flex items-center gap-3">
-            <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">4</span>
-            <h2 className="text-base font-semibold">Fund Charities &amp; Causes You Care About</h2>
-          </div>
+        <AccordionItem value="pillar-4" className="border-0">
+          <AccordionTrigger className="px-5 py-4 bg-muted/30 hover:no-underline hover:bg-muted/60 items-center data-[state=open]:border-b">
+            <div className="flex items-center gap-3">
+              <span className="flex-none w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">4</span>
+              <span className="text-base font-semibold">Fund Charities &amp; Causes You Care About</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-3">
             <p>
               Retirement provides powerful tax-advantaged tools for charitable giving. Giving strategically can reduce your taxes, satisfy your RMD, and maximize the impact of every dollar you donate.
@@ -287,9 +303,10 @@ export default async function PlanningPage({
               QCDs must go directly from your IRA custodian to the charity — you cannot withdraw funds first. Donor-Advised Funds and private foundations do not qualify for QCD treatment. Set your QCD percentage in the optimizer below.
             </p>
           </div>
-        </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      </div>
+      </Accordion>
 
       {/* ── Interactive Optimizer ─────────────────────────────────────────── */}
       <section>

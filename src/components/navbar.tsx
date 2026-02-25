@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
-import { CircleHelp, Settings, LogOut, Shield } from 'lucide-react'
+import { CircleHelp, BookOpen, Settings, LogOut, Shield } from 'lucide-react'
+import HelpDialog from './help-dialog'
+import GlossaryDialog from './glossary-dialog'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -15,7 +18,6 @@ const navItems = [
 ]
 
 const iconNavItems = [
-  { label: 'Help', href: '/help', icon: CircleHelp },
   { label: 'Account', href: '/account', icon: Settings },
 ]
 
@@ -23,6 +25,8 @@ export default function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [glossaryOpen, setGlossaryOpen] = useState(false)
 
   async function handleSignOut() {
     await signOut()
@@ -64,6 +68,20 @@ export default function Navbar() {
           {session ? (
             <div className="flex items-center gap-1 ml-3">
               <div className="h-4 w-px bg-border mx-1" />
+              <button
+                onClick={() => setHelpOpen(true)}
+                title="Help"
+                className="rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+              >
+                <CircleHelp className="size-[18px]" />
+              </button>
+              <button
+                onClick={() => setGlossaryOpen(true)}
+                title="Glossary"
+                className="rounded-md p-2 transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+              >
+                <BookOpen className="size-[18px]" />
+              </button>
               {iconNavItems.map(({ label, href, icon: Icon }) => (
                 <Link key={href} href={href} title={label} className={iconLinkClass(href)}>
                   <Icon className="size-[18px]" />
@@ -95,6 +113,8 @@ export default function Navbar() {
           )}
         </div>
       </div>
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <GlossaryDialog open={glossaryOpen} onOpenChange={setGlossaryOpen} />
     </nav>
   )
 }
