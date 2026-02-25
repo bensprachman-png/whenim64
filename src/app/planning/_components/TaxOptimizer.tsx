@@ -324,43 +324,66 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     return null
   })()
 
-  // Taxable account projection: grows at portfolio rate, adds after-tax RMDs, draws down COLA-adjusted expenses.
-  // Once taxable is depleted, shortfall is covered by Roth IRA (tax-free withdrawals).
-  const taxableProjection = useMemo(() => {
+  // Funding projection: tracks all three account types year-by-year with priority drawdown.
+  // Taxable absorbs after-tax RMDs and funds expenses first; Roth is drawn last.
+  // IRA balance comes from the tax engine (depleted by RMDs and Roth conversions).
+  const fundingProjection = useMemo(() => {
     const totalTaxableStart = brokerageTaxableTotal + numVal(form.taxableBalance)
-    const initialRoth = brokerageRothTotal + numVal(form.rothBalance)
+    const totalRothStart = brokerageRothTotal + numVal(form.rothBalance)
+    const totalIraStart = brokerageIraTotal + numVal(form.iraBalance)
     const growthRate = numVal(form.portfolioGrowthPct) / 100
     const inflation = numVal(form.inflationPct) / 100
     const baseExpenses = numVal(form.annualLivingExpenses)
-    let balance = totalTaxableStart
-    let rothAvailable = initialRoth
-    let taxableSwitchYear: number | null = null  // first year Roth supplements expenses
-    let depletionYear: number | null = null       // first year both sources are exhausted
-    const data: Array<{ year: number; age: number; balance: number; expenses: number; taxes: number; rothWithdrawal: number }> = []
+    let taxable = totalTaxableStart
+    // Track only the cumulative Roth withdrawals taken to cover expense shortfalls;
+    // the engine's rothBalanceEnd already accounts for portfolio growth + conversions.
+    let rothExpenseDrawdown = 0
+    let depletionYear: number | null = null
+    const data: Array<{ year: number; age: number; taxable: number; ira: number; roth: number; expenses: number; taxes: number; irmaa: number; rothConversion: number; ss: number; rmd: number; qcds: number }> = []
     for (const row of activeRows) {
       const yearsElapsed = row.year - startYear
       const expenses = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsed) : 0
-      const afterTaxRmd = row.rmd > 0
-        ? (row.rmd - (row.qcdsActual ?? 0)) * Math.max(0, 1 - row.effectiveRatePct / 100)
-        : 0
-      // Grow taxable; add after-tax RMDs; subtract expenses
-      balance = balance * (1 + growthRate) + afterTaxRmd - expenses
-      // Roth mirrors engine: grows at same rate, gains conversions from this year
-      rothAvailable = rothAvailable * (1 + growthRate) + row.rothConversion
-      let rothWithdrawal = 0
-      if (balance < 0) {
-        if (taxableSwitchYear === null) taxableSwitchYear = row.year
-        const shortfall = -balance
-        rothWithdrawal = Math.min(shortfall, rothAvailable)
-        rothAvailable = Math.max(0, rothAvailable - rothWithdrawal)
-        balance = 0
-        // True depletion: Roth couldn't cover the full shortfall
-        if (rothWithdrawal < shortfall && depletionYear === null) depletionYear = row.year
+      const afterTaxRate = Math.max(0, 1 - row.effectiveRatePct / 100)
+      // row.iraWithdrawal = rmd − qcdsActual: gross IRA cash that lands in the taxable account.
+      // QCDs go directly from IRA to charity and are already excluded here.
+      const afterTaxRmd = row.iraWithdrawal > 0 ? row.iraWithdrawal * afterTaxRate : 0
+      // SS payments deposit into the taxable account; after-tax portion net of effective rate.
+      const afterTaxSS  = row.ss > 0 ? row.ss * afterTaxRate : 0
+      // Taxable: grows at portfolio rate, gains after-tax RMDs and SS, funds expenses
+      taxable = taxable * (1 + growthRate) + afterTaxRmd + afterTaxSS - expenses
+      // IRA + Roth balances come directly from the engine, which applies portfolio
+      // growth, RMDs, and Roth conversions authoritatively each year.
+      const ira = Math.max(0, row.iraBalanceEnd)
+      const rothFromEngine = Math.max(0, row.rothBalanceEnd)
+      // When taxable can't cover expenses, draw from Roth last
+      if (taxable < 0) {
+        const shortfall = -taxable
+        const rothAvail = Math.max(0, rothFromEngine - rothExpenseDrawdown)
+        const withdrawal = Math.min(shortfall, rothAvail)
+        rothExpenseDrawdown += withdrawal
+        taxable = 0
       }
-      data.push({ year: row.year, age: row.age, balance, expenses, taxes: row.totalTax, rothWithdrawal })
+      const roth = Math.max(0, rothFromEngine - rothExpenseDrawdown)
+      if (taxable === 0 && ira === 0 && roth === 0 && depletionYear === null) {
+        depletionYear = row.year
+      }
+      data.push({
+        year: row.year, age: row.age,
+        taxable: Math.round(taxable), ira: Math.round(ira), roth: Math.round(roth),
+        expenses: Math.round(expenses), taxes: Math.round(row.totalTax), irmaa: Math.round(row.irmaaAnnual),
+        rothConversion: Math.round(row.rothConversion),
+        ss: Math.round(row.ss), rmd: Math.round(row.rmd), qcds: Math.round(row.qcdsActual ?? 0),
+      })
     }
-    return { data, startBalance: totalTaxableStart, taxableSwitchYear, depletionYear }
-  }, [activeRows, brokerageTaxableTotal, brokerageRothTotal, form.taxableBalance, form.rothBalance, form.annualLivingExpenses, form.portfolioGrowthPct, form.inflationPct, startYear])
+    const lastRow = data[data.length - 1]
+    return {
+      data,
+      startTaxable: totalTaxableStart, startIra: totalIraStart, startRoth: totalRothStart,
+      endTaxable: lastRow?.taxable ?? 0, endIra: lastRow?.ira ?? 0, endRoth: lastRow?.roth ?? 0,
+      depletionYear,
+    }
+  }, [activeRows, brokerageIraTotal, brokerageRothTotal, brokerageTaxableTotal, form.iraBalance, form.rothBalance, form.taxableBalance, form.annualLivingExpenses, form.portfolioGrowthPct, form.inflationPct, startYear])
+  // Note: totalRothStart is used only for the startRoth stat; the Roth bars come from row.rothBalanceEnd
 
   // Roth balances adjusted for expense drawdowns after taxable is depleted — computed for both scenarios
   const rothAdjustedTrajectory = useMemo(() => {
@@ -935,132 +958,138 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             <div className="p-4">
               <Accordion type="single" defaultValue="living" collapsible className="space-y-2">
 
-                {/* ── Living Expenses & Taxable Account ── */}
+                {/* ── Funding ── */}
                 <AccordionItem value="living" className="rounded-lg border overflow-hidden">
                   <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
-                    Living Expenses &amp; Taxable Account
+                    Funding
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
 
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-baseline justify-between gap-4 flex-wrap">
-              <CardTitle className="text-base">Taxable Account Projection</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                COLA-adjusted drawdown · RMDs (after tax) add to account · grows at portfolio growth rate
-              </p>
+              <CardTitle className="text-base">Portfolio Balance Trajectory</CardTitle>
+              {fundingProjection.depletionYear !== null && (
+                <span className="text-xs font-semibold text-destructive">
+                  ⚠ All sources depleted in {fundingProjection.depletionYear}
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">Starting Balance</p>
-                <p className="text-xl font-bold tabular-nums">{fmtK(taxableProjection.startBalance)}</p>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3 mb-4">
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Starting Taxable</p>
+                <p className="text-lg font-bold tabular-nums text-sky-500">{fmtK(fundingProjection.startTaxable)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">Year 1 Expenses</p>
-                <p className="text-xl font-bold tabular-nums">
-                  {numVal(form.annualLivingExpenses) > 0 ? fmtK(numVal(form.annualLivingExpenses)) : '—'}
-                </p>
-                <p className="text-xs text-muted-foreground">COLA-adjusted each year</p>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Starting IRA / 401k</p>
+                <p className="text-lg font-bold tabular-nums text-indigo-500">{fmtK(fundingProjection.startIra)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">Ending Taxable (Heirs)</p>
-                <p className={`text-xl font-bold tabular-nums ${(taxableProjection.data[taxableProjection.data.length - 1]?.balance ?? 0) > 0 ? '' : 'text-muted-foreground'}`}>
-                  {fmtK(taxableProjection.data[taxableProjection.data.length - 1]?.balance ?? 0)}
-                </p>
-                <p className="text-xs text-muted-foreground">end of projection</p>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Starting Roth</p>
+                <p className="text-lg font-bold tabular-nums text-emerald-500">{fmtK(fundingProjection.startRoth)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">Account Status</p>
-                {taxableProjection.depletionYear !== null ? (
-                  <>
-                    <p className="text-xl font-bold tabular-nums text-destructive">{taxableProjection.depletionYear}</p>
-                    <p className="text-xs text-muted-foreground">both sources depleted</p>
-                  </>
-                ) : taxableProjection.taxableSwitchYear !== null ? (
-                  <>
-                    <p className="text-xl font-bold tabular-nums text-amber-600">{taxableProjection.taxableSwitchYear}</p>
-                    <p className="text-xs text-muted-foreground">Roth covers from here</p>
-                  </>
-                ) : taxableProjection.startBalance > 0 ? (
-                  <>
-                    <p className="text-xl font-bold tabular-nums text-green-600">Funded</p>
-                    <p className="text-xs text-muted-foreground">covers {projectionYears}-yr plan</p>
-                  </>
-                ) : (
-                  <p className="text-xl font-bold tabular-nums text-muted-foreground">—</p>
-                )}
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Ending Taxable</p>
+                <p className={`text-lg font-bold tabular-nums ${fundingProjection.endTaxable > 0 ? 'text-sky-500' : 'text-muted-foreground'}`}>{fmtK(fundingProjection.endTaxable)}</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Ending IRA / 401k</p>
+                <p className={`text-lg font-bold tabular-nums ${fundingProjection.endIra > 0 ? 'text-indigo-500' : 'text-muted-foreground'}`}>{fmtK(fundingProjection.endIra)}</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium">Ending Roth</p>
+                <p className={`text-lg font-bold tabular-nums ${fundingProjection.endRoth > 0 ? 'text-emerald-500' : 'text-muted-foreground'}`}>{fmtK(fundingProjection.endRoth)}</p>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground border-t pt-3">
+              <strong>Funding priority:</strong> (1)&nbsp;<span className="text-sky-500 font-medium">Taxable</span> accounts first — COLA-adjusted expenses are drawn here, with Social Security payments and after-tax RMDs from the IRA depositing into this account each year.&ensp;(2)&nbsp;<span className="text-indigo-500 font-medium">IRA&nbsp;/ 401k</span> is depleted by required minimum distributions (age&nbsp;73+) and Roth conversions; excess RMD cash supplements taxable.&ensp;(3)&nbsp;<span className="text-emerald-500 font-medium">Roth&nbsp;IRA</span> last — preserving tax-free growth for heirs. Charitable giving (QCDs), real estate proceeds, or other asset sales can offset withdrawals at any stage.
+            </p>
           </CardContent>
         </Card>
 
-        {(taxableProjection.startBalance > 0 || numVal(form.annualLivingExpenses) > 0) ? (
+        {(fundingProjection.startTaxable > 0 || fundingProjection.startIra > 0 || fundingProjection.startRoth > 0 || numVal(form.annualLivingExpenses) > 0) ? (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Non-Retirement Account Balance and Expenses by Year</CardTitle>
+              <CardTitle className="text-base">Account Balances by Year</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <ComposedChart data={taxableProjection.data} margin={{ top: 10, right: 20, bottom: 0, left: 20 }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={fundingProjection.data} margin={{ top: 10, right: 20, bottom: 0, left: 20 }}>
                   <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={(v: number) => fmtK(v)} tick={{ fontSize: 11 }} width={60} />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
-                      const d = taxableProjection.data.find((r) => r.year === label)
+                      const d = fundingProjection.data.find((r) => r.year === label)
                       if (!d) return null
+                      const total = d.taxable + d.ira + d.roth
                       return (
-                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md space-y-1 min-w-[180px]">
+                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md space-y-1 min-w-[190px]">
                           <p className="font-semibold text-sm">Year {d.year}{d.age > 0 ? ` · Age ${d.age}` : ''}</p>
-                          <p className="text-sky-500">Taxable balance: <span className="font-medium text-foreground">{fmtCurrency(d.balance)}</span></p>
-                          {d.rothWithdrawal > 0 && (
-                            <p className="text-green-500">Roth supplement: <span className="font-medium text-foreground">{fmtCurrency(d.rothWithdrawal)}</span></p>
+                          <p className="text-sky-500">Taxable: <span className="font-medium text-foreground">{fmtCurrency(d.taxable)}</span></p>
+                          <p className="text-indigo-400">IRA / 401k: <span className="font-medium text-foreground">{fmtCurrency(d.ira)}</span></p>
+                          <p className="text-emerald-500">Roth IRA: <span className="font-medium text-foreground">{fmtCurrency(d.roth)}</span></p>
+                          <p className="text-muted-foreground border-t pt-1">Portfolio total: <span className="font-medium text-foreground">{fmtCurrency(total)}</span></p>
+                          {(d.ss > 0 || d.rmd > 0) && (
+                            <div className="border-t pt-1 space-y-0.5">
+                              {d.ss > 0 && <p className="text-sky-400">SS received: <span className="font-medium text-foreground">{fmtCurrency(d.ss)}</span></p>}
+                              {d.rmd > 0 && <p className="text-indigo-400">RMD: <span className="font-medium text-foreground">{fmtCurrency(d.rmd)}</span>{d.qcds > 0 && <span className="text-muted-foreground ml-1"> · QCD {fmtCurrency(d.qcds)}</span>}</p>}
+                            </div>
                           )}
-                          {d.expenses > 0 && (
-                            <p className="text-orange-500">Expenses: <span className="font-medium text-foreground">{fmtCurrency(d.expenses)}</span></p>
+                          {d.rothConversion > 0 && (
+                            <p className="text-emerald-400">↳ Roth converted: <span className="font-medium text-foreground">{fmtCurrency(d.rothConversion)}</span></p>
                           )}
-                          {d.taxes > 0 && (
-                            <p className="text-rose-500">Taxes: <span className="font-medium text-foreground">{fmtCurrency(d.taxes)}</span></p>
+                          {(d.expenses > 0 || d.taxes > 0 || d.irmaa > 0) && (
+                            <div className="border-t pt-1 space-y-0.5">
+                              {d.expenses > 0 && <p className="text-orange-400">Living expenses: <span className="font-medium text-foreground">{fmtCurrency(d.expenses)}</span></p>}
+                              {d.taxes > 0 && <p className="text-rose-400">Taxes: <span className="font-medium text-foreground">{fmtCurrency(d.taxes)}</span></p>}
+                              {d.irmaa > 0 && <p className="text-rose-300">IRMAA: <span className="font-medium text-foreground">{fmtCurrency(d.irmaa)}</span></p>}
+                            </div>
                           )}
                         </div>
                       )
                     }}
                   />
-                  <Legend verticalAlign="bottom" height={36} />
-                  {taxableProjection.taxableSwitchYear !== null && (
-                    <ReferenceLine
-                      x={taxableProjection.taxableSwitchYear}
-                      stroke="#f59e0b"
-                      strokeDasharray="4 2"
-                      strokeWidth={2}
-                      label={{ value: '→ Roth', position: 'insideTopRight', fontSize: 10, fill: '#f59e0b' }}
-                    />
-                  )}
-                  {taxableProjection.depletionYear !== null && (
-                    <ReferenceLine
-                      x={taxableProjection.depletionYear}
-                      stroke="#ef4444"
-                      strokeDasharray="4 2"
-                      strokeWidth={2}
-                      label={{ value: 'Depletes', position: 'insideTopRight', fontSize: 10, fill: '#ef4444' }}
-                    />
-                  )}
-                  <Bar stackId="balance" dataKey="balance" fill="#0ea5e9" name="Taxable Balance" />
-                  <Bar stackId="balance" dataKey="rothWithdrawal" fill="#22c55e" name="Roth Supplement" />
+                  <Legend
+                    verticalAlign="bottom"
+                    content={({ payload }) => {
+                      if (!payload?.length) return null
+                      const order = ['Taxable', 'IRA / 401k', 'Roth IRA', 'Living Expenses', 'Taxes', 'IRMAA']
+                      const sorted = [...payload].sort((a, b) => {
+                        const ai = order.indexOf(a.value as string)
+                        const bi = order.indexOf(b.value as string)
+                        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+                      })
+                      return (
+                        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-2">
+                          {sorted.map((entry, i) => (
+                            <span key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <span className="inline-block w-3 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: entry.color as string }} />
+                              {entry.value}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar stackId="s" dataKey="taxable" fill="#0ea5e9" name="Taxable" />
+                  <Bar stackId="s" dataKey="ira" fill="#818cf8" name="IRA / 401k" />
+                  <Bar stackId="s" dataKey="roth" fill="#22c55e" name="Roth IRA" />
                   <Bar stackId="costs" dataKey="expenses" fill="#f97316" name="Living Expenses" />
-                  <Bar stackId="costs" dataKey="taxes" fill="#f43f5e" name="Est. Taxes" />
+                  <Bar stackId="costs" dataKey="taxes" fill="#f43f5e" name="Taxes" />
+                  <Bar stackId="costs" dataKey="irmaa" fill="#fb7185" name="IRMAA" />
                 </ComposedChart>
               </ResponsiveContainer>
               <p className="text-xs text-muted-foreground mt-3">
-                Blue = taxable account balance. Green = Roth IRA withdrawals covering expenses after taxable is depleted (tax-free). Orange + Red = COLA-adjusted living expenses and estimated taxes. RMDs (after tax) are added back each year.
+                Left stack — portfolio balances by account type: <span className="text-sky-500 font-medium">Taxable</span> depletes first, <span className="text-indigo-400 font-medium">IRA&nbsp;/&nbsp;401k</span> falls via RMDs and conversions, <span className="text-emerald-500 font-medium">Roth</span> grows during the conversion window then draws last. Right stack — annual outflows: <span className="text-orange-400 font-medium">living expenses</span> (COLA-adjusted) + <span className="text-rose-400 font-medium">taxes</span> + <span className="text-rose-300 font-medium">IRMAA</span>. When a balance layer disappears, that source is exhausted.
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="rounded-lg border border-dashed px-6 py-5 text-sm text-muted-foreground text-center">
-            Enter a starting taxable balance or annual living expenses to see the projection chart.
+            Enter account balances or annual living expenses to see the funding projection.
           </div>
         )}
                   </AccordionContent>
@@ -1426,7 +1455,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground font-medium">Final Taxable Acct</p>
-                <p className="text-xl font-bold tabular-nums">{fmtK(taxableProjection.data[taxableProjection.data.length - 1]?.balance ?? 0)}</p>
+                <p className="text-xl font-bold tabular-nums">{fmtK(fundingProjection.endTaxable)}</p>
                 <p className="text-xs text-muted-foreground">taxable · to heirs</p>
               </div>
             </div>
