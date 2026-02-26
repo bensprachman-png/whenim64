@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     siteName: 'WhenIm64',
     type: 'website',
   },
+  other: {
+    'google-adsense-account': 'ca-pub-1948060430877539',
+  },
 };
 
 export default function RootLayout({
