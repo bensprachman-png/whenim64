@@ -123,7 +123,7 @@ export default async function Home() {
 
           {/* Hero screenshot */}
           <div className="hidden lg:block">
-            <Screenshot src="/images/dashboard.png" alt="WhenIm64 retirement dashboard" />
+            <Screenshot src="/images/steps.png" alt="WhenIm64 retirement planning steps" />
           </div>
         </div>
       </section>

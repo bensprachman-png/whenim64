@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { profiles, account } from '@/db/schema'
+import { profiles, account, user as userTable } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -15,16 +15,22 @@ export async function GET() {
     .where(eq(profiles.userId, session.user.id))
     .limit(1)
 
-  const [credentialAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(and(eq(account.userId, session.user.id), eq(account.providerId, 'credential')))
-    .limit(1)
+  const [[credentialAccount], [userRecord]] = await Promise.all([
+    db.select({ id: account.id })
+      .from(account)
+      .where(and(eq(account.userId, session.user.id), eq(account.providerId, 'credential')))
+      .limit(1),
+    db.select({ role: userTable.role })
+      .from(userTable)
+      .where(eq(userTable.id, session.user.id))
+      .limit(1),
+  ])
 
   const hasPassword = !!credentialAccount
+  const role = userRecord?.role ?? 'user'
 
-  if (!profile) return NextResponse.json({ hasPassword })
-  return NextResponse.json({ ...profile, hasPassword })
+  if (!profile) return NextResponse.json({ hasPassword, role })
+  return NextResponse.json({ ...profile, hasPassword, role })
 }
 
 export async function POST(request: Request) {

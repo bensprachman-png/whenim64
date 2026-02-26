@@ -7,7 +7,6 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
-import PlanFinder from '@/components/plan-finder'
 import PartDFinder from '@/components/part-d-finder'
 import YearSelector from '@/components/year-selector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +16,7 @@ import { zipToState, getStateName } from '@/lib/zip-to-state'
 import { getPlansForState } from '@/lib/plans'
 import MedicareEnrollmentCard from './_components/MedicareEnrollmentCard'
 import MedicarePlanElectionsCard from './_components/MedicarePlanElectionsCard'
+import SupplementalGoalsAndFinder from './_components/SupplementalGoalsAndFinder'
 import AdBanner from '@/components/AdBanner'
 
 export const metadata: Metadata = {
@@ -267,7 +267,15 @@ export default async function MedicarePage({
             </div>
           </AccordionTrigger>
           <AccordionContent className="px-6 pb-6">
-            <PlanFinder age={age} zipCode={user?.zipCode} goals={goals} birthYear={birthYear} year={year} filingStatus={user?.filingStatus ?? null} />
+            <SupplementalGoalsAndFinder
+              profileId={user?.id}
+              initialGoals={goals}
+              age={age}
+              zipCode={user?.zipCode}
+              birthYear={birthYear}
+              year={year}
+              filingStatus={user?.filingStatus ?? null}
+            />
           </AccordionContent>
         </AccordionItem>
 

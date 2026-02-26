@@ -9,7 +9,6 @@ import { useSession, authClient } from '@/lib/auth-client'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -26,14 +25,6 @@ const FILING_STATUSES = [
   { value: 'qualifying_surviving_spouse', label: 'Qualifying Surviving Spouse' },
 ]
 
-const INSURANCE_GOALS = [
-  { name: 'goalCatastrophicRisk' as const, label: 'Protect against catastrophic medical costs' },
-  { name: 'goalDoctorFreedom' as const, label: 'Freedom to choose any doctor or hospital' },
-  { name: 'goalMinPremium' as const, label: 'Keep monthly premiums as low as possible' },
-  { name: 'goalMinTotalCost' as const, label: 'Minimize total annual out-of-pocket costs' },
-  { name: 'goalTravelCoverage' as const, label: 'Coverage when traveling internationally' },
-]
-
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Enter a valid email address').or(z.literal('')),
@@ -43,12 +34,6 @@ const formSchema = z.object({
   sex: z.string().optional(),
   spouseDateOfBirth: z.string().optional(),
   spouseSex: z.string().optional(),
-  goalCatastrophicRisk: z.boolean(),
-  goalDoctorFreedom: z.boolean(),
-  goalMinPremium: z.boolean(),
-  goalMinTotalCost: z.boolean(),
-  goalTravelCoverage: z.boolean(),
-  collectingSS: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -64,6 +49,8 @@ export default function AccountPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPaid, setIsPaid] = useState(false)
   const [paidToggling, setPaidToggling] = useState(false)
+  const [paidToggleError, setPaidToggleError] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string>('user')
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -91,9 +78,6 @@ export default function AccountPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '', email: '', dateOfBirth: '', zipCode: '', filingStatus: '', sex: '', spouseDateOfBirth: '', spouseSex: '',
-      goalCatastrophicRisk: false, goalDoctorFreedom: false,
-      goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
-      collectingSS: false,
     },
   })
 
@@ -103,6 +87,7 @@ export default function AccountPage() {
     if (profile) {
       setHasPassword(profile.hasPassword ?? false)
       setIsPaid(profile.isPaid ?? false)
+      setUserRole(profile.role ?? 'user')
       const method = profile.twoFactorMethod ?? null
       setTwoFactorMethod(method)
       if (method) setSelectedMethod(method as 'email' | 'totp')
@@ -118,21 +103,12 @@ export default function AccountPage() {
         sex: profile.sex ?? '',
         spouseDateOfBirth: profile.spouseDateOfBirth ?? '',
         spouseSex: profile.spouseSex ?? '',
-        goalCatastrophicRisk: profile.goalCatastrophicRisk ?? false,
-        goalDoctorFreedom: profile.goalDoctorFreedom ?? false,
-        goalMinPremium: profile.goalMinPremium ?? false,
-        goalMinTotalCost: profile.goalMinTotalCost ?? false,
-        goalTravelCoverage: profile.goalTravelCoverage ?? false,
-        collectingSS: profile.collectingSS ?? false,
       }, { keepDirtyValues: true })
     } else {
       form.reset({
         name: session?.user?.name ?? '',
         email: session?.user?.email ?? '',
         dateOfBirth: '', zipCode: '', filingStatus: '',
-        goalCatastrophicRisk: false, goalDoctorFreedom: false,
-        goalMinPremium: false, goalMinTotalCost: false, goalTravelCoverage: false,
-        collectingSS: false,
       }, { keepDirtyValues: true })
     }
     setLoading(false)
@@ -332,20 +308,33 @@ export default function AccountPage() {
   const twoFAEnabled = session?.user?.twoFactorEnabled
   const filingStatusValue = form.watch('filingStatus')
 
-  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superuser'
+  const isAdmin = userRole === 'admin' || userRole === 'superuser'
 
   async function handlePaidToggle() {
-    if (!profileId) return
-    setPaidToggling(true)
-    const res = await fetch(`/api/users/${profileId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isPaid: !isPaid }),
-    })
-    if (res.ok) {
-      setIsPaid((p) => !p)
+    setPaidToggleError(null)
+    if (!profileId) {
+      setPaidToggleError('Save your profile first before using this toggle.')
+      return
     }
-    setPaidToggling(false)
+    setPaidToggling(true)
+    try {
+      const res = await fetch(`/api/users/${profileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPaid: !isPaid }),
+      })
+      if (res.ok) {
+        setIsPaid((p) => !p)
+        router.refresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setPaidToggleError(`Update failed (${res.status}): ${(data as { error?: string }).error ?? 'Unknown error'}`)
+      }
+    } catch {
+      setPaidToggleError('Network error — check the console.')
+    } finally {
+      setPaidToggling(false)
+    }
   }
 
   return (
@@ -404,6 +393,9 @@ export default function AccountPage() {
                   onCheckedChange={handlePaidToggle}
                 />
               </div>
+              {paidToggleError && (
+                <p className="text-xs text-destructive">{paidToggleError}</p>
+              )}
             </div>
           </CardContent>
         )}
@@ -517,69 +509,6 @@ export default function AccountPage() {
                   )} />
                 </>
               )}
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium leading-none">Medicare Supplemental Insurance Priorities</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your selections tailor the plan recommendations on the Medicare page.
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4 space-y-3">
-                  {INSURANCE_GOALS.map((goal) => (
-                    <FormField
-                      key={goal.name}
-                      control={form.control}
-                      name={goal.name}
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-3 space-y-0">
-                          <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                          <FormLabel className="font-normal cursor-pointer">{goal.label}</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium leading-none">Enrollment Status</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Helps us tailor enrollment timing advice and plan recommendations.
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4 space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="collectingSS"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-normal">Are you currently collecting Social Security benefits?</FormLabel>
-                        <FormControl>
-                          <RadioGroup
-                            value={field.value ? 'yes' : 'no'}
-                            onValueChange={(v) => field.onChange(v === 'yes')}
-                            className="flex gap-6 mt-1"
-                          >
-                            <FormItem className="flex items-center gap-2 space-y-0">
-                              <FormControl><RadioGroupItem value="yes" /></FormControl>
-                              <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center gap-2 space-y-0">
-                              <FormControl><RadioGroupItem value="no" /></FormControl>
-                              <FormLabel className="font-normal cursor-pointer">No</FormLabel>
-                            </FormItem>
-                          </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
 
               <div className="flex items-center gap-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>

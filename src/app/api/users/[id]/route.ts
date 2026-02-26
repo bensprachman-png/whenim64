@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { profiles } from '@/db/schema'
+import { profiles, user as userTable } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -46,8 +46,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (spouseMedicarePlanType !== undefined)  updates.spouseMedicarePlanType = spouseMedicarePlanType
   if (pdpTier !== undefined)                 updates.pdpTier = pdpTier
   if (spousePdpTier !== undefined)           updates.spousePdpTier = spousePdpTier
-  if (isPaid !== undefined && (session.user.role === 'admin' || session.user.role === 'superuser')) {
-    updates.isPaid = isPaid
+  if (isPaid !== undefined) {
+    const [requestingUser] = await db
+      .select({ role: userTable.role })
+      .from(userTable)
+      .where(eq(userTable.id, session.user.id))
+      .limit(1)
+    if (requestingUser?.role === 'admin' || requestingUser?.role === 'superuser') {
+      updates.isPaid = isPaid
+    }
   }
 
   console.log('[PATCH /api/users/:id] spouseDateOfBirth:', spouseDateOfBirth, '| id:', id, '| userId:', session.user.id)

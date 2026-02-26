@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     description: 'View your synced brokerage holdings and track tax treatment across IRA, Roth, and taxable accounts.',
   },
 }
-import { categorizeAccountType, type TaxTreatment } from '@/lib/snaptrade'
+import { getSnaptradeClient, categorizeAccountType, type TaxTreatment } from '@/lib/snaptrade'
 import PortfolioClient from './_components/PortfolioClient'
 
 export interface AccountRow {
@@ -54,21 +54,48 @@ export default async function PortfolioPage() {
 
   const userId = session.user.id
 
-  const [[conn], [profileRow]] = await Promise.all([
+  const [[conn], [profileRow], brokerageResult] = await Promise.all([
     db.select().from(snaptradeConnections).where(eq(snaptradeConnections.userId, userId)),
     db.select({ isPaid: profiles.isPaid }).from(profiles).where(eq(profiles.userId, userId)).limit(1),
+    getSnaptradeClient().referenceData.listAllBrokerages().catch(() => null),
   ])
   const isPaid = profileRow?.isPaid ?? false
 
+  // SnapTrade has no country field — exclude non-US brokerages by name.
+  // Country suffixes catch most cases (e.g. "Webull Canada", "Stake Australia").
+  // Named entries cover Canadian brokerages that don't include a country word.
+  const NON_US_BROKERAGE_KEYWORDS = [
+    // Country names / regions
+    'canada', 'canadian', 'australia', 'australian', 'uk', 'united kingdom',
+    'europe', 'european', 'new zealand',
+    // Canadian brokerages without a country word in their name
+    'questrade', 'wealthsimple', 'nbdb', 'national bank direct', 'qtrade', 'disnat',
+    'virtual brokers', 'scotia itrade', 'cibc investor', 'bmo investorline',
+    'rbc direct', 'td direct investing', 'desjardins', 'credential direct',
+  ]
+
+  const supportedBrokerages: string[] = brokerageResult?.data
+    ? (brokerageResult.data as { enabled?: boolean; maintenance_mode?: boolean; display_name?: string; name?: string }[])
+        .filter((b) => {
+          if (!b.enabled || b.maintenance_mode) return false
+          const label = (b.display_name ?? b.name ?? '').toLowerCase()
+          return !NON_US_BROKERAGE_KEYWORDS.some((kw) => label.includes(kw))
+        })
+        .map((b) => b.display_name ?? b.name ?? '')
+        .filter(Boolean)
+        .sort()
+    : []
+
   if (!conn) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8">
         <PortfolioClient
           isConnected={false}
           accounts={[]}
           holdings={[]}
           isDev={process.env.NODE_ENV === 'development'}
           isPaid={isPaid}
+          supportedBrokerages={supportedBrokerages}
         />
       </main>
     )
@@ -137,13 +164,14 @@ export default async function PortfolioPage() {
   }))
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
+    <main className="mx-auto max-w-4xl px-4 py-8">
       <PortfolioClient
         isConnected={true}
         accounts={accounts}
         holdings={holdingsData}
         isDev={process.env.NODE_ENV === 'development'}
         isPaid={isPaid}
+        supportedBrokerages={supportedBrokerages}
       />
     </main>
   )

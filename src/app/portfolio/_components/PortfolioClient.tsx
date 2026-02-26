@@ -42,6 +42,7 @@ interface Props {
   holdings: HoldingRow[]
   isDev?: boolean
   isPaid?: boolean
+  supportedBrokerages?: string[]
 }
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -88,7 +89,7 @@ const accountFilterFn: FilterFn<HoldingRow> = (row, columnId, filterValue) => {
   return row.getValue<string>(columnId) === filterValue
 }
 
-export default function PortfolioClient({ isConnected, accounts, holdings, isDev = false, isPaid = false }: Props) {
+export default function PortfolioClient({ isConnected, accounts, holdings, isDev = false, isPaid = false, supportedBrokerages = [] }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [connecting, setConnecting] = useState(false)
@@ -315,8 +316,7 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
         {isPaid ? (
           <div className="rounded-lg border bg-card p-8 text-center space-y-4">
             <p className="text-muted-foreground max-w-md mx-auto">
-              Connect your brokerage accounts to view your holdings and get personalized
-              Roth conversion, LTCG harvesting, and tax-loss harvesting insights.
+              Connect your brokerage accounts to view and track your holdings across IRA, Roth, and taxable accounts.
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button onClick={handleConnect} disabled={connecting} className="gap-2">
@@ -325,17 +325,19 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
             </Button>
           </div>
         ) : (
-          <div className="rounded-lg border bg-card p-8 text-center space-y-4">
-            <div className="flex items-center justify-center gap-2">
-              <Lock className="size-5 text-muted-foreground" />
+          <div className="rounded-lg border bg-card p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <Lock className="size-5 text-muted-foreground shrink-0" />
               <span className="inline-flex items-center rounded-full bg-muted px-3 py-0.5 text-xs font-semibold text-muted-foreground">
                 Premium Feature
               </span>
             </div>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Connect your brokerage accounts to automatically sync holdings and balances.
-              Get personalized Roth conversion, LTCG harvesting, and tax-loss harvesting insights.
-            </p>
+            <div className="space-y-1">
+              <p className="font-medium">Brokerage Portfolio Import</p>
+              <p className="text-sm text-muted-foreground">
+                Connect your brokerage accounts to automatically sync holdings and balances across IRA, Roth, and taxable accounts.
+              </p>
+            </div>
             <button
               disabled
               title="Subscription billing coming soon"
@@ -344,7 +346,20 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
               <Lock className="size-4" />
               Upgrade to Premium
             </button>
-            <p className="text-xs text-muted-foreground">Subscription billing coming soon.</p>
+            {supportedBrokerages.length > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Currently Supported Brokerages
+                </p>
+                <div className="grid grid-cols-3 gap-x-4 gap-y-1 max-h-48 overflow-y-auto pr-1">
+                  {supportedBrokerages.map((name) => (
+                    <span key={name} className="text-xs text-muted-foreground truncate">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

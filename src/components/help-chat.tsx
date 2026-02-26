@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { SendHorizonalIcon, MicIcon, MicOffIcon, Wand2Icon, Loader2Icon } from 'lucide-react'
+import { SendHorizonalIcon, MicIcon, MicOffIcon, Wand2Icon, Loader2Icon, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -67,7 +67,10 @@ function MessageBubble({ message }: { message: Message }) {
 
 const SILENCE_TIMEOUT_MS = 4000
 
-export default function HelpChat({ className }: { className?: string }) {
+export default function HelpChat({ className, isPaid: isPaidProp = false }: { className?: string; isPaid?: boolean }) {
+  // Start with the server-provided value, then confirm from the API on mount.
+  // This corrects for Next.js router-cache serving a stale server render.
+  const [isPaid, setIsPaid] = useState(isPaidProp)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -82,6 +85,15 @@ export default function HelpChat({ className }: { className?: string }) {
   const autoSubmitRef = useRef(false)
   // Always-current reference to sendMessage to avoid stale closures in recognition callbacks
   const sendMessageRef = useRef<(text: string) => void>(() => {})
+
+  useEffect(() => {
+    // Re-fetch isPaid from the API so a stale Next.js router-cache render
+    // doesn't keep showing the paywall after the dev toggle is flipped.
+    fetch('/api/users')
+      .then((r) => r.json())
+      .then((data) => { if (typeof data?.isPaid === 'boolean') setIsPaid(data.isPaid) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -286,57 +298,80 @@ export default function HelpChat({ className }: { className?: string }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      <form onSubmit={handleSubmit} className="flex gap-2 items-end pt-3 border-t">
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask a retirement question… (Enter to send, Shift+Enter for new line)"
-          rows={1}
-          disabled={loading}
-          className={cn(
-            'flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[40px] max-h-[120px]',
-            isListening && 'ring-2 ring-destructive border-destructive'
-          )}
-          style={{ fieldSizing: 'content' } as React.CSSProperties}
-        />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <Button
-                type="button"
-                onClick={handleCleanup}
-                disabled={loading || cleaningUp || !input.trim()}
-                size="icon"
-                variant="outline"
-              >
-                {cleaningUp
-                  ? <Loader2Icon className="size-4 animate-spin" />
-                  : <Wand2Icon className="size-4" />}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Clean up with AI</TooltipContent>
-        </Tooltip>
-        <Button
-          type="button"
-          onClick={toggleListening}
-          disabled={loading}
-          size="icon"
-          variant={isListening ? 'destructive' : 'outline'}
-          title={isListening ? 'Stop listening' : 'Start voice input'}
-        >
-          {isListening ? <MicOffIcon className="size-4" /> : <MicIcon className="size-4" />}
-        </Button>
-        <Button type="submit" disabled={loading || !input.trim()} size="icon">
-          <SendHorizonalIcon className="size-4" />
-        </Button>
-      </form>
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        For general information only — not personalized financial or legal advice.
-      </p>
+      {/* Input area — Premium only */}
+      {isPaid ? (
+        <>
+          <form onSubmit={handleSubmit} className="flex gap-2 items-end pt-3 border-t">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a retirement question… (Enter to send, Shift+Enter for new line)"
+              rows={1}
+              disabled={loading}
+              className={cn(
+                'flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[40px] max-h-[120px]',
+                isListening && 'ring-2 ring-destructive border-destructive'
+              )}
+              style={{ fieldSizing: 'content' } as React.CSSProperties}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    onClick={handleCleanup}
+                    disabled={loading || cleaningUp || !input.trim()}
+                    size="icon"
+                    variant="outline"
+                  >
+                    {cleaningUp
+                      ? <Loader2Icon className="size-4 animate-spin" />
+                      : <Wand2Icon className="size-4" />}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Clean up with AI</TooltipContent>
+            </Tooltip>
+            <Button
+              type="button"
+              onClick={toggleListening}
+              disabled={loading}
+              size="icon"
+              variant={isListening ? 'destructive' : 'outline'}
+              title={isListening ? 'Stop listening' : 'Start voice input'}
+            >
+              {isListening ? <MicOffIcon className="size-4" /> : <MicIcon className="size-4" />}
+            </Button>
+            <Button type="submit" disabled={loading || !input.trim()} size="icon">
+              <SendHorizonalIcon className="size-4" />
+            </Button>
+          </form>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            For general information only — not personalized financial or legal advice.
+          </p>
+        </>
+      ) : (
+        <div className="pt-3 border-t">
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+            <Lock className="size-4 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">AI chat is a Premium feature</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Upgrade to ask follow-up questions and get answers tailored to your plan.
+              </p>
+            </div>
+            <button
+              disabled
+              title="Subscription billing coming soon"
+              className="shrink-0 inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground opacity-50 cursor-not-allowed"
+            >
+              Upgrade
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
