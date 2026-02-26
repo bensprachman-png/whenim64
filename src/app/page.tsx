@@ -5,6 +5,11 @@ import { auth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import type { StaticImport } from 'next/dist/shared/lib/get-img-props'
+import imgSteps from '../../public/images/steps.png'
+import imgPlanning from '../../public/images/planning.png'
+import imgMedicare from '../../public/images/medicare.png'
+import imgDashboard from '../../public/images/dashboard.png'
 import {
   Activity, Shield, TrendingUp, Calculator, PiggyBank, Briefcase,
   MessageSquare, CheckCircle2, ArrowRight,
@@ -78,7 +83,7 @@ const PREMIUM_FEATURES = [
   'Brokerage portfolio import and sync',
 ]
 
-function Screenshot({ src, alt }: { src: string; alt: string }) {
+function Screenshot({ src, alt }: { src: string | StaticImport; alt: string }) {
   return (
     <div className="relative w-full aspect-[4/3] rounded-xl border overflow-hidden shadow-md">
       <Image src={src} alt={alt} fill className="object-cover object-top" sizes="(max-width: 768px) 100vw, 50vw" />
@@ -123,7 +128,7 @@ export default async function Home() {
 
           {/* Hero screenshot */}
           <div className="hidden lg:block">
-            <Screenshot src="/images/steps.png" alt="WhenIm64 retirement planning steps" />
+            <Screenshot src={imgSteps} alt="WhenIm64 retirement planning steps" />
           </div>
         </div>
       </section>
@@ -136,15 +141,15 @@ export default async function Home() {
           </p>
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Screenshot src="/images/planning.png" alt="Roth conversion optimizer chart" />
+              <Screenshot src={imgPlanning} alt="Roth conversion optimizer chart" />
               <p className="text-xs text-center text-muted-foreground">Roth Conversion Optimizer</p>
             </div>
             <div className="space-y-2">
-              <Screenshot src="/images/medicare.png" alt="Medicare plan finder" />
+              <Screenshot src={imgMedicare} alt="Medicare plan finder" />
               <p className="text-xs text-center text-muted-foreground">Medicare Plan Finder</p>
             </div>
             <div className="space-y-2">
-              <Screenshot src="/images/dashboard.png" alt="Retirement dashboard overview" />
+              <Screenshot src={imgDashboard} alt="Retirement dashboard overview" />
               <p className="text-xs text-center text-muted-foreground">Retirement Dashboard</p>
             </div>
           </div>
