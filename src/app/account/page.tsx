@@ -62,6 +62,8 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isPaid, setIsPaid] = useState(false)
+  const [paidToggling, setPaidToggling] = useState(false)
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -100,6 +102,7 @@ export default function AccountPage() {
     const profile = await res.json()
     if (profile) {
       setHasPassword(profile.hasPassword ?? false)
+      setIsPaid(profile.isPaid ?? false)
       const method = profile.twoFactorMethod ?? null
       setTwoFactorMethod(method)
       if (method) setSelectedMethod(method as 'email' | 'totp')
@@ -329,8 +332,82 @@ export default function AccountPage() {
   const twoFAEnabled = session?.user?.twoFactorEnabled
   const filingStatusValue = form.watch('filingStatus')
 
+  const isAdmin = session?.user?.role === 'admin' || session?.user?.role === 'superuser'
+
+  async function handlePaidToggle() {
+    if (!profileId) return
+    setPaidToggling(true)
+    const res = await fetch(`/api/users/${profileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPaid: !isPaid }),
+    })
+    if (res.ok) {
+      setIsPaid((p) => !p)
+    }
+    setPaidToggling(false)
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
+
+      {/* Membership card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-xl">Membership</CardTitle>
+            {isPaid ? (
+              <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                Premium Member
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-muted px-3 py-0.5 text-xs font-semibold text-muted-foreground">
+                Free Plan
+              </span>
+            )}
+          </div>
+          <CardDescription>
+            {isPaid
+              ? 'You have full access to all features, including brokerage portfolio import and an ad-free experience.'
+              : 'Upgrade to Premium for an ad-free experience and brokerage portfolio import.'}
+          </CardDescription>
+        </CardHeader>
+        {!isPaid && (
+          <CardContent>
+            <ul className="text-sm text-muted-foreground space-y-1 mb-4">
+              <li>✓ Ad-free experience</li>
+              <li>✓ Brokerage portfolio import &amp; sync</li>
+              <li>✓ All planning and dashboard features</li>
+            </ul>
+            <button
+              disabled
+              title="Subscription billing coming soon"
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"
+            >
+              Upgrade to Premium
+            </button>
+            <p className="text-xs text-muted-foreground mt-2">Subscription billing coming soon.</p>
+          </CardContent>
+        )}
+        {isAdmin && (
+          <CardContent className={isPaid ? undefined : 'pt-0'}>
+            <div className="rounded-md border border-dashed border-muted p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dev / Admin only</p>
+              <div className="flex items-center justify-between">
+                <label htmlFor="paid-toggle" className="text-sm cursor-pointer">
+                  Simulate paid user
+                </label>
+                <Switch
+                  id="paid-toggle"
+                  checked={isPaid}
+                  disabled={paidToggling}
+                  onCheckedChange={handlePaidToggle}
+                />
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Profile card */}
       <Card>

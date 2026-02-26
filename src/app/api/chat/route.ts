@@ -256,11 +256,13 @@ async function buildPlanningContext(
       ? `- Break-even year: ${breakevenYear} (cumulative savings first exceed upfront conversion taxes)`
       : `- Break-even: NOT reached within the ${projectionYears}-year projection (cumulative conversion taxes exceed lifetime savings)`)
 
-    // Compact year-by-year table
+    // Compact year-by-year table (capped at 20 rows to limit input tokens)
+    const MAX_TABLE_ROWS = 20
+    const tableRows = optimizedRows.slice(0, MAX_TABLE_ROWS)
     lines.push('')
-    lines.push('Year-by-year projection (with Roth conversions). Columns: Year, Age, Filing, RMD, Conversion, ConvTax, FedTax, IRMAA, TotalCost, BaselineCost, CumulativeSavings')
+    lines.push(`Year-by-year projection (with Roth conversions, first ${tableRows.length} of ${optimizedRows.length} years shown). Columns: Year, Age, Filing, RMD, Conversion, ConvTax, FedTax, IRMAA, TotalCost, BaselineCost, CumulativeSavings`)
     lines.push('Year  Age  Fil   RMD      Conv     ConvTax  FedTax   IRMAA    Total    Base     CumSav')
-    for (const [i, opt] of optimizedRows.entries()) {
+    for (const [i, opt] of tableRows.entries()) {
       const base = baselineRows[i]
       const fil = opt.filing === 'joint' ? 'jnt' : 'sgl'
       lines.push([
@@ -276,6 +278,9 @@ async function buildPlanningContext(
         fmtK(base.totalCost).padStart(8),
         fmtK(cumSavings[i]).padStart(8),
       ].join(' '))
+    }
+    if (optimizedRows.length > MAX_TABLE_ROWS) {
+      lines.push(`(... ${optimizedRows.length - MAX_TABLE_ROWS} more years — refer to lifetime summary figures above for end-of-projection balances)`)
     }
   } catch {
     lines.push('\n(Tax projection could not be computed — scenario inputs shown above.)')
@@ -365,13 +370,19 @@ export async function POST(request: Request) {
 
   const client = new Anthropic({ apiKey })
 
+  // Cap conversation history at 10 messages (5 turns) to control input token cost.
+  // The system prompt already contains the full planning context, so older turns
+  // are rarely needed to answer the current question.
+  const MAX_HISTORY = 10
+  const trimmedMessages = messages.slice(-MAX_HISTORY)
+
   let stream: Awaited<ReturnType<typeof client.messages.stream>>
   try {
     stream = await client.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: systemPrompt,
-      messages,
+      messages: trimmedMessages,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to connect to Anthropic API.'

@@ -1,4 +1,14 @@
+import type { Metadata } from 'next'
 import ContactForm from './_components/ContactForm'
+
+export const metadata: Metadata = {
+  title: 'Contact',
+  description: 'Get in touch with the WhenIm64 team — questions, bug reports, or feature feedback welcome.',
+  openGraph: {
+    title: 'Contact | WhenIm64',
+    description: 'Get in touch with the WhenIm64 team — questions, bug reports, or feature feedback welcome.',
+  },
+}
 
 export default function ContactPage() {
   return (

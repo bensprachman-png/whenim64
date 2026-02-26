@@ -3,15 +3,27 @@ import { profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getFullRetirementAge, fraToString } from '@/lib/milestones'
+import AdBanner from '@/components/AdBanner'
+
+export const metadata: Metadata = {
+  title: 'Social Security',
+  description: 'Optimize your Social Security claiming strategy — understand Full Retirement Age, delayed credits worth 8% per year, spousal and survivor benefits, and the lifetime break-even calculation.',
+  openGraph: {
+    title: 'Social Security | WhenIm64',
+    description: 'Optimize your Social Security claiming strategy — FRA, delay credits, spousal benefits, and break-even analysis.',
+  },
+}
 
 export default async function SocialSecurityPage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
+  const isPaid = user?.isPaid ?? false
   const dob = user?.dateOfBirth ?? null
   const collectingSS = user?.collectingSS ?? false
 
@@ -30,9 +42,12 @@ export default async function SocialSecurityPage() {
       <MilestoneTimeline dateOfBirth={dob} highlight={['ss-early', 'ss-fra', 'ss-max']} />
 
       <h1 className="text-3xl font-bold mb-2">Social Security</h1>
-      <p className="text-muted-foreground mb-3">
+      <p className="text-muted-foreground mb-4">
         When you claim Social Security is one of the most consequential retirement decisions you'll make. Waiting can permanently increase your monthly benefit by tens of thousands of dollars over your lifetime.
       </p>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SOCIAL_SECURITY ?? 'social-security'} className="mb-6" />}
+
       <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
         <a href="https://www.ssa.gov/myaccount/" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
           My Social Security Account →
@@ -155,6 +170,8 @@ export default async function SocialSecurityPage() {
           </CardContent>
         </Card>
       </div>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SOCIAL_SECURITY ?? 'social-security'} className="mt-6" />}
     </main>
   )
 }

@@ -14,7 +14,7 @@ import {
   type ColumnFiltersState,
   type FilterFn,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, RefreshCw, Link2, Link2Off } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, RefreshCw, Link2, Link2Off, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -41,6 +41,7 @@ interface Props {
   accounts: AccountRow[]
   holdings: HoldingRow[]
   isDev?: boolean
+  isPaid?: boolean
 }
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -87,7 +88,7 @@ const accountFilterFn: FilterFn<HoldingRow> = (row, columnId, filterValue) => {
   return row.getValue<string>(columnId) === filterValue
 }
 
-export default function PortfolioClient({ isConnected, accounts, holdings, isDev = false }: Props) {
+export default function PortfolioClient({ isConnected, accounts, holdings, isDev = false, isPaid = false }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [connecting, setConnecting] = useState(false)
@@ -311,17 +312,41 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Portfolio</h1>
-        <div className="rounded-lg border bg-card p-8 text-center space-y-4">
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Connect your brokerage accounts to view your holdings and get personalized
-            Roth conversion, LTCG harvesting, and tax-loss harvesting insights.
-          </p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button onClick={handleConnect} disabled={connecting} className="gap-2">
-            <Link2 className="size-4" />
-            {connecting ? 'Opening portal…' : 'Connect Brokerage'}
-          </Button>
-        </div>
+        {isPaid ? (
+          <div className="rounded-lg border bg-card p-8 text-center space-y-4">
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Connect your brokerage accounts to view your holdings and get personalized
+              Roth conversion, LTCG harvesting, and tax-loss harvesting insights.
+            </p>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button onClick={handleConnect} disabled={connecting} className="gap-2">
+              <Link2 className="size-4" />
+              {connecting ? 'Opening portal…' : 'Connect Brokerage'}
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-card p-8 text-center space-y-4">
+            <div className="flex items-center justify-center gap-2">
+              <Lock className="size-5 text-muted-foreground" />
+              <span className="inline-flex items-center rounded-full bg-muted px-3 py-0.5 text-xs font-semibold text-muted-foreground">
+                Premium Feature
+              </span>
+            </div>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Connect your brokerage accounts to automatically sync holdings and balances.
+              Get personalized Roth conversion, LTCG harvesting, and tax-loss harvesting insights.
+            </p>
+            <button
+              disabled
+              title="Subscription billing coming soon"
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed gap-2"
+            >
+              <Lock className="size-4" />
+              Upgrade to Premium
+            </button>
+            <p className="text-xs text-muted-foreground">Subscription billing coming soon.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -353,10 +378,12 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
               <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Syncing…' : 'Sync Now'}
             </Button>
-            <Button onClick={handleConnect} disabled={connecting} variant="outline" className="gap-2">
-              <Link2 className="size-4" />
-              {connecting ? 'Opening portal…' : 'Add Brokerage'}
-            </Button>
+            {isPaid && (
+              <Button onClick={handleConnect} disabled={connecting} variant="outline" className="gap-2">
+                <Link2 className="size-4" />
+                {connecting ? 'Opening portal…' : 'Add Brokerage'}
+              </Button>
+            )}
           </div>
         </div>
         <DisconnectDialog open={confirmDisconnect} onClose={() => setConfirmDisconnect(false)} onConfirm={handleDisconnect} loading={disconnecting} />
@@ -375,10 +402,12 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
             <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing…' : 'Sync Now'}
           </Button>
-          <Button onClick={handleConnect} disabled={connecting} variant="outline" size="sm" className="gap-1.5">
-            <Link2 className="size-4" />
-            {connecting ? 'Opening…' : 'Add Brokerage'}
-          </Button>
+          {isPaid && (
+            <Button onClick={handleConnect} disabled={connecting} variant="outline" size="sm" className="gap-1.5">
+              <Link2 className="size-4" />
+              {connecting ? 'Opening…' : 'Add Brokerage'}
+            </Button>
+          )}
           {isDev && (
             <Button onClick={handleDevSeed} disabled={seeding} variant="ghost" size="sm" className="text-muted-foreground gap-1 font-mono text-xs">
               <RefreshCw className={`size-3 ${seeding ? 'animate-spin' : ''}`} />

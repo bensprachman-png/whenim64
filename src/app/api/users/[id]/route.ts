@@ -17,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     goalCatastrophicRisk, goalDoctorFreedom, goalMinPremium, goalMinTotalCost, goalTravelCoverage,
     collectingSS,
     enrolledPartA, enrolledPartB, spouseEnrolledPartA, spouseEnrolledPartB,
-    medicarePlanType, spouseMedicarePlanType, pdpTier, spousePdpTier } = body
+    medicarePlanType, spouseMedicarePlanType, pdpTier, spousePdpTier, isPaid } = body
 
   // Build a partial update — only include fields that were actually sent in the body.
   // This allows Medicare/enrollment components to PATCH a subset of fields without
@@ -46,6 +46,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (spouseMedicarePlanType !== undefined)  updates.spouseMedicarePlanType = spouseMedicarePlanType
   if (pdpTier !== undefined)                 updates.pdpTier = pdpTier
   if (spousePdpTier !== undefined)           updates.spousePdpTier = spousePdpTier
+  if (isPaid !== undefined && (session.user.role === 'admin' || session.user.role === 'superuser')) {
+    updates.isPaid = isPaid
+  }
 
   console.log('[PATCH /api/users/:id] spouseDateOfBirth:', spouseDateOfBirth, '| id:', id, '| userId:', session.user.id)
 

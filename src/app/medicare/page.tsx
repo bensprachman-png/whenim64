@@ -4,6 +4,7 @@ import { profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
 import { auth } from '@/lib/auth'
 import MilestoneTimeline from '@/components/milestone-timeline'
 import PlanFinder from '@/components/plan-finder'
@@ -16,6 +17,16 @@ import { zipToState, getStateName } from '@/lib/zip-to-state'
 import { getPlansForState } from '@/lib/plans'
 import MedicareEnrollmentCard from './_components/MedicareEnrollmentCard'
 import MedicarePlanElectionsCard from './_components/MedicarePlanElectionsCard'
+import AdBanner from '@/components/AdBanner'
+
+export const metadata: Metadata = {
+  title: 'Medicare',
+  description: 'Navigate Medicare enrollment windows, compare Medigap and Medicare Advantage, find prescription drug plans, and avoid late-enrollment penalties.',
+  openGraph: {
+    title: 'Medicare | WhenIm64',
+    description: 'Navigate Medicare enrollment, compare Medigap vs Medicare Advantage, and find the right Part D drug plan.',
+  },
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +55,7 @@ export default async function MedicarePage({
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
+  const isPaid = user?.isPaid ?? false
   const dob = user?.dateOfBirth ?? null
   const iep = dob ? getIEP(dob) : null
   const collectingSS = user?.collectingSS ?? false
@@ -94,7 +106,7 @@ export default async function MedicarePage({
       <MilestoneTimeline dateOfBirth={dob} highlight={['medicare']} />
 
       <h1 className="text-3xl font-bold mb-2">Medicare</h1>
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-4">
         <p className="text-muted-foreground">
           Medicare is federal health insurance for people 65 and older. Understanding when and how to enroll — and which supplemental coverage to add — can save you thousands per year.
         </p>
@@ -102,6 +114,8 @@ export default async function MedicarePage({
           <YearSelector />
         </Suspense>
       </div>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_MEDICARE ?? 'medicare'} className="mb-6" />}
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mb-6 text-sm">
         <a href="https://www.medicare.gov/account/login" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
@@ -272,6 +286,8 @@ export default async function MedicarePage({
         </AccordionItem>
 
       </Accordion>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_MEDICARE ?? 'medicare'} className="mt-6" />}
 
     </main>
   )

@@ -14,7 +14,18 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 import { computeProjectionYears } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
+import type { Metadata } from 'next'
 import TaxOptimizer from './_components/TaxOptimizer'
+import AdBanner from '@/components/AdBanner'
+
+export const metadata: Metadata = {
+  title: 'Retirement Planning',
+  description: 'Model Roth conversions, RMDs, Social Security timing, IRMAA management, and tax-efficient withdrawal strategies across your full retirement horizon.',
+  openGraph: {
+    title: 'Retirement Planning | WhenIm64',
+    description: 'Model Roth conversions, RMDs, Social Security timing, and IRMAA management across your full retirement horizon.',
+  },
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +37,7 @@ export default async function PlanningPage({
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
   const [user] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
+  const isPaid = user?.isPaid ?? false
   const dob = user?.dateOfBirth ?? null
 
   let rmdYear: number | null = null
@@ -87,9 +99,11 @@ export default async function PlanningPage({
           <YearSelector />
         </Suspense>
       </div>
-      <p className="text-muted-foreground mb-10">
+      <p className="text-muted-foreground mb-6">
         A comprehensive plan covering four pillars: funding your lifestyle, minimizing costs, building a legacy, and charitable giving. Use the optimizer at the bottom to model your specific situation.
       </p>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_PLANNING ?? 'planning'} className="mb-10" />}
 
       {/* ── Planning Pillars ─────────────────────────────────────────────── */}
       <Accordion type="single" defaultValue="pillar-1" collapsible className="mb-12 rounded-lg border overflow-hidden divide-y">
@@ -324,6 +338,8 @@ export default async function PlanningPage({
           stateInfo={stateInfo}
         />
       </section>
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_PLANNING ?? 'planning'} className="mt-6" />}
     </main>
   )
 }

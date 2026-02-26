@@ -95,6 +95,7 @@ export const profiles = sqliteTable('profiles', {
   spousePdpTier: text(),
   createdAt: text().notNull(),
   twoFactorMethod: text(),
+  isPaid: int({ mode: 'boolean' }).notNull().default(false),
 })
 
 export const snaptradeConnections = sqliteTable('snaptradeConnections', {

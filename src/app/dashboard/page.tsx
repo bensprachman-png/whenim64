@@ -1,12 +1,23 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
 import { profiles, taxScenarios } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import AdBanner from '@/components/AdBanner'
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+  description: 'Your personalized retirement snapshot — Medicare enrollment status, Social Security timing, RMD projections, quarterly estimated taxes, and Roth conversion strategy.',
+  openGraph: {
+    title: 'Dashboard | WhenIm64',
+    description: 'Your personalized retirement snapshot — Medicare, Social Security, RMDs, and tax planning in one place.',
+  },
+}
 import MilestoneTimeline from '@/components/milestone-timeline'
 import { getFullRetirementAge, fraToString } from '@/lib/milestones'
 import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
@@ -117,6 +128,7 @@ export default async function DashboardPage() {
   if (!session) redirect('/login')
 
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, session.user.id)).limit(1)
+  const isPaid = profile?.isPaid ?? false
   const [scenario] = await db.select().from(taxScenarios).where(eq(taxScenarios.userId, session.user.id)).limit(1)
 
   const dob = profile?.dateOfBirth ?? null
@@ -238,6 +250,8 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 space-y-8">
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_DASHBOARD ?? 'dashboard'} />}
 
       {/* Greeting */}
       <div>
@@ -589,6 +603,8 @@ export default async function DashboardPage() {
           </Button>
         </div>
       )}
+
+      {!isPaid && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_DASHBOARD ?? 'dashboard'} />}
 
     </main>
   )

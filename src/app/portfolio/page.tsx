@@ -1,9 +1,19 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { eq } from 'drizzle-orm'
+import type { Metadata } from 'next'
 import { auth } from '@/lib/auth'
 import { db } from '@/db'
-import { snaptradeConnections, brokerageAccounts, holdings } from '@/db/schema'
+import { snaptradeConnections, brokerageAccounts, holdings, profiles } from '@/db/schema'
+
+export const metadata: Metadata = {
+  title: 'Portfolio',
+  description: 'View your synced brokerage holdings, track unrealized gains and losses, and see tax treatment across IRA, Roth, and taxable accounts.',
+  openGraph: {
+    title: 'Portfolio | WhenIm64',
+    description: 'View your synced brokerage holdings and track tax treatment across IRA, Roth, and taxable accounts.',
+  },
+}
 import { categorizeAccountType, type TaxTreatment } from '@/lib/snaptrade'
 import PortfolioClient from './_components/PortfolioClient'
 
@@ -44,10 +54,11 @@ export default async function PortfolioPage() {
 
   const userId = session.user.id
 
-  const [conn] = await db
-    .select()
-    .from(snaptradeConnections)
-    .where(eq(snaptradeConnections.userId, userId))
+  const [[conn], [profileRow]] = await Promise.all([
+    db.select().from(snaptradeConnections).where(eq(snaptradeConnections.userId, userId)),
+    db.select({ isPaid: profiles.isPaid }).from(profiles).where(eq(profiles.userId, userId)).limit(1),
+  ])
+  const isPaid = profileRow?.isPaid ?? false
 
   if (!conn) {
     return (
@@ -57,6 +68,7 @@ export default async function PortfolioPage() {
           accounts={[]}
           holdings={[]}
           isDev={process.env.NODE_ENV === 'development'}
+          isPaid={isPaid}
         />
       </main>
     )
@@ -131,6 +143,7 @@ export default async function PortfolioPage() {
         accounts={accounts}
         holdings={holdingsData}
         isDev={process.env.NODE_ENV === 'development'}
+        isPaid={isPaid}
       />
     </main>
   )

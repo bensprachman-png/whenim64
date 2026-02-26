@@ -1,4 +1,14 @@
+import type { Metadata } from 'next'
 import HelpChat from '@/components/help-chat'
+
+export const metadata: Metadata = {
+  title: 'Retirement Help',
+  description: 'Ask our AI assistant anything about Medicare, Social Security, RMDs, Roth conversions, or tax-efficient withdrawal strategies in retirement.',
+  openGraph: {
+    title: 'Retirement Help | WhenIm64',
+    description: 'Ask our AI assistant anything about Medicare, Social Security, RMDs, Roth conversions, or tax-efficient withdrawal strategies in retirement.',
+  },
+}
 
 export default function HelpPage() {
   return (
