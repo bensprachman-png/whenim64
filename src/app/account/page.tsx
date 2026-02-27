@@ -104,10 +104,10 @@ export default function AccountPage() {
     if (profile?.id) {
       setProfileId(profile.id)
       form.reset({
-        name: profile.name,
+        name: profile.name ?? '',
         email: profile.email ?? '',
-        dateOfBirth: profile.dateOfBirth,
-        zipCode: profile.zipCode,
+        dateOfBirth: profile.dateOfBirth ?? '',
+        zipCode: profile.zipCode ?? '',
         filingStatus: profile.filingStatus ?? '',
         sex: profile.sex ?? '',
         spouseDateOfBirth: profile.spouseDateOfBirth ?? '',
