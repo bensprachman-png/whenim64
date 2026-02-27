@@ -316,7 +316,7 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
         return (
           <div className="flex items-center gap-2">
             <span className="text-xs">
-              {u.brokerageAccountCount} acct{u.brokerageAccountCount !== 1 ? 's' : ''}
+              {u.brokerageAccountCount} conn{u.brokerageAccountCount !== 1 ? 's' : ''}
             </span>
             <Button
               size="sm"

@@ -1,4 +1,4 @@
-import { count, desc, eq, max, sql } from 'drizzle-orm'
+import { count, countDistinct, desc, eq, max, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts, snaptradeConnections, brokerageAccounts, profiles } from '@/db/schema'
 import { requireAdminPage } from '@/lib/admin'
@@ -41,7 +41,7 @@ export default async function AdminPage() {
     db.select({ userId: snaptradeConnections.userId }).from(snaptradeConnections),
 
     db
-      .select({ userId: brokerageAccounts.userId, accountCount: count(brokerageAccounts.id) })
+      .select({ userId: brokerageAccounts.userId, accountCount: countDistinct(brokerageAccounts.brokerageName) })
       .from(brokerageAccounts)
       .groupBy(brokerageAccounts.userId),
 
