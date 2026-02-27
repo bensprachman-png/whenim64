@@ -1,6 +1,6 @@
 import { count, desc, eq, max, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts } from '@/db/schema'
+import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts, snaptradeConnections, brokerageAccounts } from '@/db/schema'
 import { requireAdminPage } from '@/lib/admin'
 import AdminUsersClient from './_components/AdminUsersClient'
 import AdminContactsClient, { type ContactRow } from './_components/AdminContactsClient'
@@ -8,7 +8,7 @@ import AdminContactsClient, { type ContactRow } from './_components/AdminContact
 export default async function AdminPage() {
   const { role, userId } = await requireAdminPage()
 
-  const [users, sessionStats, failedStats, credentialAccounts, contactRows] = await Promise.all([
+  const [users, sessionStats, failedStats, credentialAccounts, contactRows, snapConnections, accountCounts] = await Promise.all([
     db.select().from(userTable),
 
     db
@@ -37,6 +37,13 @@ export default async function AdminPage() {
       .where(eq(accountTable.providerId, 'credential')),
 
     db.select().from(contacts).orderBy(desc(contacts.createdAt)),
+
+    db.select({ userId: snaptradeConnections.userId }).from(snaptradeConnections),
+
+    db
+      .select({ userId: brokerageAccounts.userId, accountCount: count(brokerageAccounts.id) })
+      .from(brokerageAccounts)
+      .groupBy(brokerageAccounts.userId),
   ])
 
   const contactData: ContactRow[] = contactRows.map((c) => ({
@@ -54,6 +61,8 @@ export default async function AdminPage() {
   const sessionMap = new Map(sessionStats.map((s) => [s.userId, s]))
   const failedMap = new Map(failedStats.map((f) => [f.userId, f]))
   const passwordSet = new Set(credentialAccounts.map((a) => a.userId))
+  const connectedSet = new Set(snapConnections.map((c) => c.userId))
+  const accountCountMap = new Map(accountCounts.map((a) => [a.userId, a.accountCount]))
 
   const userData = users.map((u) => ({
     id: u.id,
@@ -70,6 +79,8 @@ export default async function AdminPage() {
       return v instanceof Date ? v.toISOString() : new Date((v as number) * 1000).toISOString()
     })(),
     failedAttempts24h: failedMap.get(u.id)?.failedCount ?? 0,
+    brokerageConnected: connectedSet.has(u.id),
+    brokerageAccountCount: accountCountMap.get(u.id) ?? 0,
   }))
 
   return (

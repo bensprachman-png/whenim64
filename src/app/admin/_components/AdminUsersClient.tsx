@@ -13,7 +13,7 @@ import {
   type ColumnFiltersState,
   type FilterFn,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, KeyRound } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, KeyRound, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -45,6 +45,8 @@ export interface UserRow {
   loginCount: number
   lastLogin: string | null
   failedAttempts24h: number
+  brokerageConnected: boolean
+  brokerageAccountCount: number
 }
 
 interface Props {
@@ -75,6 +77,7 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [resetSentId, setResetSentId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null)
+  const [confirmDisconnect, setConfirmDisconnect] = useState<UserRow | null>(null)
   const [error, setError] = useState<string>('')
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -114,6 +117,27 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
       } else {
         setResetSentId(targetId)
         setTimeout(() => setResetSentId((prev) => (prev === targetId ? null : prev)), 3000)
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoadingId(null)
+    }
+  }, [])
+
+  const handleDisconnectBrokerage = useCallback(async (targetId: string) => {
+    setLoadingId(targetId)
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/users/${targetId}/brokerage`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to disconnect brokerage')
+      } else {
+        setUsers((prev) =>
+          prev.map((u) => u.id === targetId ? { ...u, brokerageConnected: false, brokerageAccountCount: 0 } : u)
+        )
+        setConfirmDisconnect(null)
       }
     } catch {
       setError('Network error')
@@ -236,6 +260,34 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
       },
     },
     {
+      id: 'brokerage',
+      header: 'Brokerage',
+      size: 120,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const u = row.original
+        if (!u.brokerageConnected) {
+          return <span className="text-xs text-muted-foreground">—</span>
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-xs">
+              {u.brokerageAccountCount} acct{u.brokerageAccountCount !== 1 ? 's' : ''}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={loadingId === u.id}
+              onClick={() => setConfirmDisconnect(u)}
+              className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+            >
+              <Unlink className="size-3" />
+            </Button>
+          </div>
+        )
+      },
+    },
+    {
       id: 'resetPassword',
       header: 'Reset Pwd',
       size: 110,
@@ -281,7 +333,7 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
         )
       },
     },
-  ], [callerRole, callerId, loadingId, handleRoleChange, handleResetPassword, resetSentId])
+  ], [callerRole, callerId, loadingId, handleRoleChange, handleResetPassword, handleDisconnectBrokerage, resetSentId])
 
   const table = useReactTable({
     data: users,
@@ -445,6 +497,30 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
           </Button>
         </div>
       </div>
+
+      {/* Disconnect brokerage confirmation dialog */}
+      <Dialog open={!!confirmDisconnect} onOpenChange={(open) => { if (!open) setConfirmDisconnect(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect brokerage?</DialogTitle>
+            <DialogDescription>
+              This will remove the SnapTrade connection for <strong>{confirmDisconnect?.name}</strong> ({confirmDisconnect?.email}),
+              delete all their synced accounts and holdings, and free up the SnapTrade slot.
+              They can reconnect at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDisconnect(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={loadingId === confirmDisconnect?.id}
+              onClick={() => confirmDisconnect && handleDisconnectBrokerage(confirmDisconnect.id)}
+            >
+              {loadingId === confirmDisconnect?.id ? 'Disconnecting…' : 'Disconnect'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null) }}>
