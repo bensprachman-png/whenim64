@@ -15,6 +15,7 @@ import {
 } from '@tanstack/react-table'
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, KeyRound, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -47,6 +48,7 @@ export interface UserRow {
   failedAttempts24h: number
   brokerageConnected: boolean
   brokerageAccountCount: number
+  isPaid: boolean
 }
 
 interface Props {
@@ -138,6 +140,30 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
           prev.map((u) => u.id === targetId ? { ...u, brokerageConnected: false, brokerageAccountCount: 0 } : u)
         )
         setConfirmDisconnect(null)
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoadingId(null)
+    }
+  }, [])
+
+  const handleTogglePaid = useCallback(async (targetId: string, newValue: boolean) => {
+    setLoadingId(targetId)
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/users/${targetId}/paid`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPaid: newValue }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to update paid status')
+      } else {
+        setUsers((prev) =>
+          prev.map((u) => u.id === targetId ? { ...u, isPaid: newValue } : u)
+        )
       }
     } catch {
       setError('Network error')
@@ -260,6 +286,24 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
       },
     },
     {
+      id: 'paid',
+      header: 'Paid',
+      size: 80,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const u = row.original
+        const hasProfile = u.isPaid !== undefined
+        if (!hasProfile) return <span className="text-xs text-muted-foreground">—</span>
+        return (
+          <Switch
+            checked={u.isPaid}
+            disabled={loadingId === u.id}
+            onCheckedChange={(checked) => handleTogglePaid(u.id, checked)}
+          />
+        )
+      },
+    },
+    {
       id: 'brokerage',
       header: 'Brokerage',
       size: 120,
@@ -333,7 +377,7 @@ export default function AdminUsersClient({ initialUsers, callerRole, callerId }:
         )
       },
     },
-  ], [callerRole, callerId, loadingId, handleRoleChange, handleResetPassword, handleDisconnectBrokerage, resetSentId])
+  ], [callerRole, callerId, loadingId, handleRoleChange, handleResetPassword, handleDisconnectBrokerage, handleTogglePaid, resetSentId])
 
   const table = useReactTable({
     data: users,

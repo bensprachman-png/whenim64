@@ -1,6 +1,6 @@
 import { count, desc, eq, max, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts, snaptradeConnections, brokerageAccounts } from '@/db/schema'
+import { user as userTable, session as sessionTable, account as accountTable, auditLog, contacts, snaptradeConnections, brokerageAccounts, profiles } from '@/db/schema'
 import { requireAdminPage } from '@/lib/admin'
 import AdminUsersClient from './_components/AdminUsersClient'
 import AdminContactsClient, { type ContactRow } from './_components/AdminContactsClient'
@@ -8,7 +8,7 @@ import AdminContactsClient, { type ContactRow } from './_components/AdminContact
 export default async function AdminPage() {
   const { role, userId } = await requireAdminPage()
 
-  const [users, sessionStats, failedStats, credentialAccounts, contactRows, snapConnections, accountCounts] = await Promise.all([
+  const [users, sessionStats, failedStats, credentialAccounts, contactRows, snapConnections, accountCounts, paidRows] = await Promise.all([
     db.select().from(userTable),
 
     db
@@ -44,6 +44,8 @@ export default async function AdminPage() {
       .select({ userId: brokerageAccounts.userId, accountCount: count(brokerageAccounts.id) })
       .from(brokerageAccounts)
       .groupBy(brokerageAccounts.userId),
+
+    db.select({ userId: profiles.userId, isPaid: profiles.isPaid }).from(profiles),
   ])
 
   const contactData: ContactRow[] = contactRows.map((c) => ({
@@ -63,6 +65,7 @@ export default async function AdminPage() {
   const passwordSet = new Set(credentialAccounts.map((a) => a.userId))
   const connectedSet = new Set(snapConnections.map((c) => c.userId))
   const accountCountMap = new Map(accountCounts.map((a) => [a.userId, a.accountCount]))
+  const paidMap = new Map(paidRows.map((p) => [p.userId, p.isPaid]))
 
   const userData = users.map((u) => ({
     id: u.id,
@@ -81,6 +84,7 @@ export default async function AdminPage() {
     failedAttempts24h: failedMap.get(u.id)?.failedCount ?? 0,
     brokerageConnected: connectedSet.has(u.id),
     brokerageAccountCount: accountCountMap.get(u.id) ?? 0,
+    isPaid: !!(paidMap.get(u.id) ?? false),
   }))
 
   return (
