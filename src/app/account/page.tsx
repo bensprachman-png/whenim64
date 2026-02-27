@@ -57,6 +57,10 @@ export default function AccountPage() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPaid, setIsPaid] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteScope, setDeleteScope] = useState<'data' | 'account'>('data')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -313,6 +317,34 @@ export default function AccountPage() {
   const isNew = !profileId
   const twoFAEnabled = session?.user?.twoFactorEnabled
   const filingStatusValue = form.watch('filingStatus')
+
+  async function handleDeleteSubmit() {
+    setDeleteError(null)
+    setDeleteLoading(true)
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: deleteScope }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setDeleteError((data as { error?: string }).error ?? 'Something went wrong.')
+        return
+      }
+      if (deleteScope === 'account') {
+        await authClient.signOut()
+        router.push('/')
+      } else {
+        setDeleteDialogOpen(false)
+        router.refresh()
+      }
+    } catch {
+      setDeleteError('Network error — please try again.')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
@@ -676,6 +708,78 @@ export default function AccountPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+          <CardDescription>
+            Permanently delete your data or your entire account. These actions cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            onClick={() => { setDeleteScope('data'); setDeleteError(null); setDeleteDialogOpen(true) }}
+          >
+            Delete Account or Data…
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) setDeleteDialogOpen(false) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete account or data</DialogTitle>
+            <DialogDescription>
+              Choose what you want to delete. <strong>This cannot be undone — deleted data cannot be recovered.</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <RadioGroup
+            value={deleteScope}
+            onValueChange={(v) => setDeleteScope(v as 'data' | 'account')}
+            className="space-y-3 py-2"
+          >
+            <label className="flex items-start gap-3 rounded-md border p-3 cursor-pointer has-[:checked]:border-destructive has-[:checked]:bg-destructive/5">
+              <RadioGroupItem value="data" className="mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Delete my data only</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Removes your profile, planning scenarios, and brokerage connections. Your login and email address will be kept.
+                </p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3 rounded-md border p-3 cursor-pointer has-[:checked]:border-destructive has-[:checked]:bg-destructive/5">
+              <RadioGroupItem value="account" className="mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Delete my account completely</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Permanently removes your account, login, and all associated data. You will be signed out immediately.
+                </p>
+              </div>
+            </label>
+          </RadioGroup>
+
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSubmit} disabled={deleteLoading}>
+              {deleteLoading
+                ? 'Deleting…'
+                : deleteScope === 'account'
+                  ? 'Delete My Account'
+                  : 'Delete My Data'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
