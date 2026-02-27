@@ -30,6 +30,7 @@ export interface TaxInputs {
   inflationPct: number        // annual COLA / inflation rate applied to SS and IRMAA brackets
   conversionStopYear: number  // first year where conversions are NOT applied (use 9999 for always)
   medicareEnrollees: 1 | 2    // number of household members on Medicare (multiplies IRMAA)
+  medicareStartYear: number   // first year IRMAA applies (Part B enrollment); 0 = auto = max(retirementYear, birthYear+65)
   sex: Sex | null           // primary user's biological sex (for life expectancy)
   // Spouse (0 / undefined means no spouse)
   spouseBirthYear: number
@@ -268,7 +269,7 @@ interface YearMetrics {
   effectiveRatePct: number; irmaaAnnual: number; totalCost: number
 }
 
-function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number): YearMetrics {
+function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number, medicareStartYear: number): YearMetrics {
   const { w2, ss, iraWithdrawal, interestIncome, dividendIncome, capGainsDist, stcg, ltcg, otherIncome, qcds, age, filing } = base
 
   // SS provisional income = all income (excluding SS itself) + half of SS
@@ -294,7 +295,7 @@ function computeYearMetrics(base: YearBase, rothConversion: number, year: number
   const effectiveRatePct = totalTax / Math.max(1, magi) * 100
 
   let irmaaAnnual = 0
-  if (age >= 65) {
+  if (age >= 65 && year >= medicareStartYear) {
     irmaaAnnual = lookupIrmaa(magi, filing, year, inflationPct, medicareEnrollees)
   }
 
@@ -322,7 +323,7 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     w2Income, interestIncome, dividendIncome, capGainsDist,
     stcg, ltcg, otherIncome, iraWithdrawals, qcdPct,
     portfolioGrowthPct, retirementYear, ssStartYear, ssPaymentsPerYear,
-    filing, birthYear, startYear, projectionYears, irmaaTargetTier, inflationPct, conversionStopYear, medicareEnrollees,
+    filing, birthYear, startYear, projectionYears, irmaaTargetTier, inflationPct, conversionStopYear, medicareEnrollees, medicareStartYear,
     sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex, stateTaxRate,
     planToAge, spousePlanToAge,
     annualDeferredContrib, annualRothContrib, annualEmployerMatch,
@@ -344,6 +345,11 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
   const firstDeathYear = (primaryDeathYear && spouseDeathYear)
     ? Math.min(primaryDeathYear, spouseDeathYear)
     : null
+
+  // Effective Medicare Part B start year — 0 means auto: max(retirementYear, birthYear+65)
+  const effectiveMedicareStartYear = medicareStartYear > 0
+    ? medicareStartYear
+    : Math.max(retirementYear, birthYear > 0 ? birthYear + 65 : 0)
 
   for (let i = 0; i < projectionYears; i++) {
     const year = startYear + i
@@ -409,11 +415,11 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     let metrics: YearMetrics
 
     if (!applyConversions || year >= conversionStopYear) {
-      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
+      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
     } else {
-      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
+      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
       rothConversion = computeConversionAmount(baseMet.magi, iraBalance, yearFiling, irmaaTargetTier, year, inflationPct)
-      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees, stateTaxRate)
+      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
       conversionTax = optMet.totalTax - baseMet.totalTax
       metrics = optMet
       iraBalance = Math.max(0, iraBalance - rothConversion)

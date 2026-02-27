@@ -13,18 +13,21 @@ export async function POST() {
 
   const devUserId = session.user.id
 
-  if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
-    return NextResponse.json({ error: 'TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set to seed from prod' }, { status: 500 })
+  if (!process.env.TURSO_PROD_DATABASE_URL || !process.env.TURSO_PROD_AUTH_TOKEN) {
+    return NextResponse.json({ error: 'TURSO_PROD_DATABASE_URL and TURSO_PROD_AUTH_TOKEN must be set in .env.local' }, { status: 500 })
   }
 
   try {
     const prod = createClient({
-      url: process.env.TURSO_DATABASE_URL,
+      url: process.env.TURSO_PROD_DATABASE_URL,
+      authToken: process.env.TURSO_PROD_AUTH_TOKEN,
+    })
+    const dev = createClient({
+      url: process.env.TURSO_DATABASE_URL!,
       authToken: process.env.TURSO_AUTH_TOKEN,
     })
-    const dev = createClient({ url: 'file:./whenim64.db' })
 
-    // Find the matching user in prod by email
+    // Find the matching user in dev by id, then match to prod by email
     const devUserRes = await dev.execute(`SELECT email FROM user WHERE id = '${devUserId}'`)
     const email = devUserRes.rows[0]?.email as string
     if (!email) return NextResponse.json({ error: 'Dev user not found' }, { status: 404 })

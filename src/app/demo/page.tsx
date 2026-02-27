@@ -55,6 +55,7 @@ const DEMO_SCENARIO = {
   spouseSsPaymentsPerYear: 24000,
   inflationPct: 2.5,
   medicareEnrollees: 2,
+  medicareStartYear: 0,
   irmaaTargetTier: 0 as 0,
   conversionWindow: 'always' as const,
   showConversions: true,

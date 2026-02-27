@@ -236,6 +236,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       ssPaymentsPerYear: numVal(form.ssPaymentsPerYear),
       inflationPct: numVal(form.inflationPct),
       medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
+      medicareStartYear: 0,
       filing: taxFiling,
       birthYear: birthYear ?? 0,
       startYear,

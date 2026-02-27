@@ -96,6 +96,7 @@ interface FormState {
   ssPaymentsPerYear: string
   inflationPct: string
   medicareEnrollees: '1' | '2'
+  medicareStartYear: string   // 0 = auto (max of retirementYear and birthYear+65)
   spouseSsStartYear: string
   spouseSsPaymentsPerYear: string
   spouseBirthYearOverride: string  // local-only fallback when profile lacks spouse DOB
@@ -137,6 +138,7 @@ function initForm(
     ssPaymentsPerYear: nz(scenario?.ssPaymentsPerYear),
     inflationPct: String(scenario?.inflationPct ?? 2.5),
     medicareEnrollees: (scenario?.medicareEnrollees != null ? String(scenario.medicareEnrollees) : (isJoint ? '2' : '1')) as '1' | '2',
+    medicareStartYear: scenario?.medicareStartYear ? String(scenario.medicareStartYear) : '0',
     spouseSsStartYear: nz(scenario?.spouseSsStartYear),
     spouseSsPaymentsPerYear: nz(scenario?.spouseSsPaymentsPerYear),
     spouseBirthYearOverride: '',
@@ -277,6 +279,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       ssPaymentsPerYear: numVal(form.ssPaymentsPerYear),
       inflationPct: numVal(form.inflationPct),
       medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
+      medicareStartYear: numVal(form.medicareStartYear),
       filing: taxFiling,
       birthYear: birthYear ?? 0,
       startYear,
@@ -484,6 +487,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             spouseSsPaymentsPerYear: numVal(form.spouseSsPaymentsPerYear),
             inflationPct: numVal(form.inflationPct),
             medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
+            medicareStartYear: numVal(form.medicareStartYear),
             irmaaTargetTier,
             conversionWindow,
             showConversions,
@@ -838,6 +842,19 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground mt-1">IRMAA is paid per person — joint filers often pay it twice.</p>
+                        </div>
+                        <div className="space-y-1">
+                          <NumberInput
+                            id="medicareStartYear"
+                            label="Medicare Part B Start Year"
+                            value={form.medicareStartYear === '0' ? '' : form.medicareStartYear}
+                            onChange={(v) => setForm((f) => ({ ...f, medicareStartYear: v || '0' }))}
+                            step="1"
+                            prefix=""
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            IRMAA charges begin this year. Leave blank to auto-set to the later of retirement year or age 65 (typical for those on employer insurance until retirement).
+                          </p>
                         </div>
                       </div>
                     </div>

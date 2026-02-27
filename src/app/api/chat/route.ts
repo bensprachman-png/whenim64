@@ -208,6 +208,7 @@ async function buildPlanningContext(
       ssPaymentsPerYear:     ts.ssPaymentsPerYear ?? 0,
       inflationPct:          ts.inflationPct ?? 2.5,
       medicareEnrollees:     ts.medicareEnrollees === 2 ? 2 : 1,
+      medicareStartYear:     ts.medicareStartYear ?? 0,
       filing,
       birthYear,
       startYear,

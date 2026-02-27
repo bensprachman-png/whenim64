@@ -204,6 +204,7 @@ export default async function DashboardPage() {
       inflationPct: scenario.inflationPct,
       conversionStopYear,
       medicareEnrollees: (scenario.medicareEnrollees ?? 1) as 1 | 2,
+      medicareStartYear: scenario.medicareStartYear ?? 0,
       sex,
       spouseBirthYear: spouseBirthYear ?? 0,
       spouseSsStartYear: scenario.spouseSsStartYear ?? 0,

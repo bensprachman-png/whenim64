@@ -172,6 +172,7 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   // Projection settings
   inflationPct: real().notNull().default(2.5),
   medicareEnrollees: int().notNull().default(1),
+  medicareStartYear: int().notNull().default(0),
   irmaaTargetTier: int().notNull().default(0),
   conversionWindow: text().notNull().default('always'),
   showConversions: int({ mode: 'boolean' }).notNull().default(true),
