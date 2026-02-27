@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useRef, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   useReactTable,
@@ -93,6 +93,8 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [connecting, setConnecting] = useState(false)
+  const [popupOpen, setPopupOpen] = useState(false)
+  const popupRef = useRef<Window | null>(null)
   const [seeding, setSeeding] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -112,8 +114,19 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
       if (!res.ok) {
         setError(data.error ?? 'Failed to connect')
       } else {
-        window.open(data.redirectURI, '_blank')
-        startTransition(() => router.refresh())
+        const popup = window.open(data.redirectURI, 'snaptrade_connect', 'width=900,height=700,left=200,top=100')
+        popupRef.current = popup
+        setPopupOpen(true)
+        // Detect when the popup is closed (via X button, customRedirect, or our
+        // parent-side "Done" button) and refresh the page automatically.
+        const timer = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(timer)
+            popupRef.current = null
+            setPopupOpen(false)
+            startTransition(() => router.refresh())
+          }
+        }, 1000)
       }
     } catch {
       setError('Network error')
@@ -160,6 +173,13 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
     } finally {
       setDisconnecting(false)
     }
+  }
+
+  const handlePopupDone = () => {
+    popupRef.current?.close()
+    popupRef.current = null
+    setPopupOpen(false)
+    startTransition(() => router.refresh())
   }
 
   const handleDevSeed = async () => {
@@ -313,6 +333,16 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">Portfolio</h1>
+        {popupOpen && <PopupDoneBanner onDone={handlePopupDone} />}
+        {isDev && (
+          <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 flex items-center justify-between gap-4">
+            <span className="text-xs text-muted-foreground font-mono">dev: no live connection needed</span>
+            <Button onClick={handleDevSeed} disabled={seeding} variant="ghost" size="sm" className="text-muted-foreground gap-1 font-mono text-xs">
+              <RefreshCw className={`size-3 ${seeding ? 'animate-spin' : ''}`} />
+              {seeding ? 'Seeding…' : '[dev] Seed from prod'}
+            </Button>
+          </div>
+        )}
         {isPaid ? (
           <div className="rounded-lg border bg-card p-8 text-center space-y-4">
             <p className="text-muted-foreground max-w-md mx-auto">
@@ -370,6 +400,7 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
   if (accounts.length === 0) {
     return (
       <div className="space-y-4">
+        {popupOpen && <PopupDoneBanner onDone={handlePopupDone} />}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Portfolio</h1>
           <Button variant="ghost" size="sm" className="text-muted-foreground gap-1" onClick={() => setConfirmDisconnect(true)}>
@@ -434,6 +465,8 @@ export default function PortfolioClient({ isConnected, accounts, holdings, isDev
           </Button>
         </div>
       </div>
+
+      {popupOpen && <PopupDoneBanner onDone={handlePopupDone} />}
 
       {error && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -647,6 +680,17 @@ function StatCard({ label, value, sub, valueColor, custom }: {
           {sub && <p className={`text-xs ${valueColor ?? 'text-muted-foreground'}`}>{sub}</p>}
         </>
       )}
+    </div>
+  )
+}
+
+function PopupDoneBanner({ onDone }: { onDone: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-4 py-3 text-sm text-blue-900 dark:text-blue-300">
+      <span>Brokerage portal is open. Finish connecting, then click <strong>Done</strong> to continue.</span>
+      <Button size="sm" onClick={onDone} className="shrink-0">
+        Done — I&apos;ve Connected
+      </Button>
     </div>
   )
 }

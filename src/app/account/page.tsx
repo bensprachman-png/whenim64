@@ -27,13 +27,22 @@ const FILING_STATUSES = [
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Enter a valid email address').or(z.literal('')),
+  email: z.string().email('Enter a valid email address'),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid US zip code'),
   filingStatus: z.string().min(1, 'Please select a filing status'),
-  sex: z.string().optional(),
+  sex: z.string().min(1, 'Please select a biological sex'),
   spouseDateOfBirth: z.string().optional(),
   spouseSex: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.filingStatus === 'married_jointly') {
+    if (!data.spouseDateOfBirth) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Spouse date of birth is required', path: ['spouseDateOfBirth'] })
+    }
+    if (!data.spouseSex) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Please select spouse biological sex', path: ['spouseSex'] })
+    }
+  }
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -104,6 +113,7 @@ export default function AccountPage() {
         spouseDateOfBirth: profile.spouseDateOfBirth ?? '',
         spouseSex: profile.spouseSex ?? '',
       }, { keepDirtyValues: true })
+      setTimeout(() => form.trigger(), 0)
     } else {
       form.reset({
         name: session?.user?.name ?? '',

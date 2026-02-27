@@ -48,12 +48,24 @@ export async function POST() {
       userSecret = decrypt(conn.snaptradeUserSecret)
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? 'http://localhost:3000'
-    const isLocalhost = appUrl.includes('localhost') || appUrl.includes('127.0.0.1')
+    // Derive the app origin from the incoming request headers so this works
+    // in every environment without needing a separate env var.
+    const reqHeaders = await headers()
+    const host = reqHeaders.get('host') ?? 'localhost:3000'
+    const proto = reqHeaders.get('x-forwarded-proto') ?? (host.includes('localhost') ? 'http' : 'https')
+    const appUrl = `${proto}://${host}`
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
     const loginRes = await snaptrade.authentication.loginSnapTradeUser({
       userId,
       userSecret,
-      ...(isLocalhost ? {} : { customRedirect: `${appUrl}/portfolio/connected` }),
+      // When a customRedirect is set, SnapTrade redirects to it after the broker
+      // OAuth completes instead of showing the /connection-complete page.
+      // immediateRedirect skips the SnapTrade portal landing and goes straight to
+      // the broker login, which also suppresses the /connection-complete/null page.
+      ...(isLocalhost ? {} : {
+        customRedirect: `${appUrl}/portfolio/connected`,
+        immediateRedirect: true,
+      }),
     })
     const redirectURI = (loginRes.data as { redirectURI: string }).redirectURI
 

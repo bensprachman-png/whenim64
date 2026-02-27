@@ -30,7 +30,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import { projectTaxes, computeProjectionYears, ssaExpectedAge, type ScenarioRow, type IrmaaTargetTier, type Sex } from '@/lib/tax-engine'
+import { projectTaxes, computeProjectionYears, ssaExpectedAge, type ScenarioRow, type IrmaaTargetTier, type Sex, type TaxInputs } from '@/lib/tax-engine'
 import type { FilingStatus } from '@/lib/tax-engine'
 import type { taxScenarios } from '@/db/schema'
 
@@ -94,11 +94,13 @@ interface FormState {
   retirementYear: string
   ssStartYear: string
   ssPaymentsPerYear: string
+  ssMonthlyFraBenefit: string   // FRA monthly benefit from SSA statement (today's $); 0 = use ssPaymentsPerYear
   inflationPct: string
   medicareEnrollees: '1' | '2'
   medicareStartYear: string   // 0 = auto (max of retirementYear and birthYear+65)
   spouseSsStartYear: string
   spouseSsPaymentsPerYear: string
+  spouseSsMonthlyFraBenefit: string
   spouseBirthYearOverride: string  // local-only fallback when profile lacks spouse DOB
   planToAge: string          // override SSA life expectancy for primary ('' = SSA default)
   spousePlanToAge: string    // override SSA life expectancy for spouse
@@ -136,11 +138,13 @@ function initForm(
     retirementYear: String(scenario?.retirementYear ?? currentYear + 5),
     ssStartYear: String(scenario?.ssStartYear ?? defaultSsStartYear),
     ssPaymentsPerYear: nz(scenario?.ssPaymentsPerYear),
+    ssMonthlyFraBenefit: nz(scenario?.ssMonthlyFraBenefit),
     inflationPct: String(scenario?.inflationPct ?? 2.5),
     medicareEnrollees: (scenario?.medicareEnrollees != null ? String(scenario.medicareEnrollees) : (isJoint ? '2' : '1')) as '1' | '2',
     medicareStartYear: scenario?.medicareStartYear ? String(scenario.medicareStartYear) : '0',
     spouseSsStartYear: nz(scenario?.spouseSsStartYear),
     spouseSsPaymentsPerYear: nz(scenario?.spouseSsPaymentsPerYear),
+    spouseSsMonthlyFraBenefit: nz(scenario?.spouseSsMonthlyFraBenefit),
     spouseBirthYearOverride: '',
     planToAge: scenario?.planToAge ? String(scenario.planToAge) : '',
     spousePlanToAge: scenario?.spousePlanToAge ? String(scenario.spousePlanToAge) : '',
@@ -208,6 +212,41 @@ function NumberInput({ id, label, value, onChange, step = '100', prefix = '$', s
 }
 
 
+// ─── Social Security FRA helpers ─────────────────────────────────────────────
+
+/** Full Retirement Age in whole months from birth. */
+function getFraMonths(birthYear: number): number {
+  if (birthYear <= 1954) return 66 * 12
+  if (birthYear >= 1960) return 67 * 12
+  return 66 * 12 + (birthYear - 1954) * 2   // +2 months per year from 1955–1959
+}
+
+/** Display string for FRA, e.g. "67" or "66 + 2 mo". */
+function fraDisplay(birthYear: number): string {
+  const m = getFraMonths(birthYear)
+  const yrs = Math.floor(m / 12), mo = m % 12
+  return mo === 0 ? `${yrs}` : `${yrs} + ${mo} mo`
+}
+
+/**
+ * Percentage adjustment applied to the FRA benefit when claiming at startYear.
+ * Negative = early reduction, positive = delayed credit.
+ * Assumes birth month = January (only birth year is known).
+ */
+function ssAdjustmentPct(birthYear: number, startYear: number): number {
+  const fraMonths = getFraMonths(birthYear)
+  const claimMonths = (startYear - birthYear) * 12
+  const diff = claimMonths - fraMonths          // positive = delayed, negative = early
+  if (diff >= 0) {
+    // Delayed retirement credits: +2/3 % per month, max to age 70
+    const maxDelay = 70 * 12 - fraMonths
+    return Math.min(diff, maxDelay) * (2 / 3)
+  }
+  const early = -diff
+  if (early <= 36) return -(early * 5 / 9)
+  return -(36 * 5 / 9 + (early - 36) * 5 / 12)
+}
+
 export default function TaxOptimizer({ initialScenario, birthYear, defaultFilingStatus, defaultSsStartYear, sex, spouseBirthYear, spouseSex, brokerageIraAccounts, brokerageRothAccounts, brokerageTaxableAccounts, stateInfo }: Props) {
   const isJoint = defaultFilingStatus === 'married_jointly' || defaultFilingStatus === 'joint'
   const taxFiling: FilingStatus = isJoint ? 'joint' : 'single'
@@ -226,6 +265,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
   const [irmaaTargetTier, setIrmaaTargetTier] = useState<IrmaaTargetTier>((initialScenario?.irmaaTargetTier ?? 0) as IrmaaTargetTier)
   const [showConversions, setShowConversions] = useState<boolean>(initialScenario?.showConversions ?? true)
   const [conversionWindow, setConversionWindow] = useState<'always' | 'before-ss' | 'before-rmd'>((initialScenario?.conversionWindow ?? 'always') as 'always' | 'before-ss' | 'before-rmd')
+  const [comparisonWindow, setComparisonWindow] = useState<'always' | 'before-ss' | 'before-rmd'>((initialScenario?.conversionWindow ?? 'always') as 'always' | 'before-ss' | 'before-rmd')
 
   function set(field: keyof FormState) {
     return (v: string) => setForm((f) => ({ ...f, [field]: v }))
@@ -236,13 +276,68 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
   // Highlight indicators — show badges on triggers when key fields are missing
   const assetsNeedInput = brokerageIraTotal === 0 && brokerageRothTotal === 0 && brokerageTaxableTotal === 0
     && numVal(form.iraBalance) === 0 && numVal(form.rothBalance) === 0 && numVal(form.taxableBalance) === 0
-  const ssNeedsInput = numVal(form.ssPaymentsPerYear) === 0
   const expensesNeedInput = numVal(form.annualLivingExpenses) === 0
-  const inputsNeedAttention = assetsNeedInput || ssNeedsInput || expensesNeedInput
   const projectionNeedsReview = initialScenario?.retirementYear == null
 
   // Computed outside memo so UI can reference it for the plan-age dropdowns
   const effectiveSpouseBirthYear = spouseBirthYear ?? (numVal(form.spouseBirthYearOverride) > 0 ? numVal(form.spouseBirthYearOverride) : null)
+
+  // IRS 2026 contribution limits (age-aware)
+  const primaryAge = birthYear ? startYear - birthYear : 0
+  const spouseAge  = effectiveSpouseBirthYear ? startYear - effectiveSpouseBirthYear : 0
+  const contribLimit = (age: number) => age >= 50 ? 39_000 : 30_500  // 401k + IRA combined max
+  const primaryContribLimit = contribLimit(primaryAge)
+  const spouseContribLimit  = contribLimit(spouseAge)
+  const primaryContribTotal = numVal(form.annualDeferredContrib) + numVal(form.annualRothContrib)
+  const spouseContribTotal  = numVal(form.spouseAnnualDeferredContrib) + numVal(form.spouseAnnualRothContrib)
+  const primaryContribOver  = primaryContribTotal > primaryContribLimit
+  const spouseContribOver   = spouseContribTotal  > spouseContribLimit
+
+  // SS FRA-based benefit computation
+  // The SSA statement shows benefits in today's dollars.
+  // - Before FRA: statement shows the FRA amount → we apply claiming-age adjustment + COLA.
+  // - Past FRA:   statement shows year-by-year amounts (already age-adjusted) → COLA only.
+  const ssStartYr = numVal(form.ssStartYear)
+  const primaryFraBenefit = numVal(form.ssMonthlyFraBenefit)
+  // Is the primary person currently past their FRA?
+  const primaryPastFraNow = birthYear !== null && (startYear - birthYear) * 12 >= getFraMonths(birthYear)
+  const primarySsAdjPct = (!primaryPastFraNow && birthYear && ssStartYr > 0)
+    ? ssAdjustmentPct(birthYear, ssStartYr) : null
+  const primarySsColaYrs = ssStartYr > startYear ? ssStartYr - startYear : 0
+  const primarySsColaFactor = Math.pow(1 + numVal(form.inflationPct) / 100, primarySsColaYrs)
+  const computedPrimarySsAnnual = (() => {
+    if (primaryFraBenefit <= 0) return null
+    if (primaryPastFraNow) {
+      // Statement already shows the age-adjusted amount for each year; COLA only.
+      // Require a start year so the user knows which row of their statement to use.
+      if (ssStartYr <= 0) return null
+      return Math.round(primaryFraBenefit * 12 * primarySsColaFactor)
+    }
+    if (primarySsAdjPct === null) return null
+    return Math.round(primaryFraBenefit * 12 * (1 + primarySsAdjPct / 100) * primarySsColaFactor)
+  })()
+
+  const spouseSsStartYr = numVal(form.spouseSsStartYear)
+  const spouseFraBenefit = numVal(form.spouseSsMonthlyFraBenefit)
+  const spousePastFraNow = effectiveSpouseBirthYear !== null &&
+    (startYear - effectiveSpouseBirthYear) * 12 >= getFraMonths(effectiveSpouseBirthYear)
+  const spouseSsAdjPct = (!spousePastFraNow && effectiveSpouseBirthYear && spouseSsStartYr > 0)
+    ? ssAdjustmentPct(effectiveSpouseBirthYear, spouseSsStartYr) : null
+  const spouseSsColaYrs = spouseSsStartYr > startYear ? spouseSsStartYr - startYear : 0
+  const spouseSsColaFactor = Math.pow(1 + numVal(form.inflationPct) / 100, spouseSsColaYrs)
+  const computedSpouseSsAnnual = (() => {
+    if (spouseFraBenefit <= 0) return null
+    if (spousePastFraNow) {
+      if (spouseSsStartYr <= 0) return null
+      return Math.round(spouseFraBenefit * 12 * spouseSsColaFactor)
+    }
+    if (spouseSsAdjPct === null) return null
+    return Math.round(spouseFraBenefit * 12 * (1 + spouseSsAdjPct / 100) * spouseSsColaFactor)
+  })()
+
+  // ssNeedsInput: flag when neither FRA nor manual amount is entered
+  const ssNeedsInput = computedPrimarySsAnnual === null && numVal(form.ssPaymentsPerYear) === 0
+  const inputsNeedAttention = assetsNeedInput || ssNeedsInput || expensesNeedInput
 
   // Expensive projection — memoised on inputs only (not on showConversions)
   const { baselineRows, optimizedRows, summary, projectionYears } = useMemo(() => {
@@ -276,7 +371,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       portfolioGrowthPct: numVal(form.portfolioGrowthPct),
       retirementYear: numVal(form.retirementYear),
       ssStartYear: ssStart,
-      ssPaymentsPerYear: numVal(form.ssPaymentsPerYear),
+      ssPaymentsPerYear: computedPrimarySsAnnual ?? numVal(form.ssPaymentsPerYear),
       inflationPct: numVal(form.inflationPct),
       medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
       medicareStartYear: numVal(form.medicareStartYear),
@@ -289,7 +384,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       sex,
       spouseBirthYear: effectiveSpouseBirthYear ?? 0,
       spouseSsStartYear: numVal(form.spouseSsStartYear),
-      spouseSsPaymentsPerYear: numVal(form.spouseSsPaymentsPerYear),
+      spouseSsPaymentsPerYear: computedSpouseSsAnnual ?? numVal(form.spouseSsPaymentsPerYear),
       spouseSex,
       stateTaxRate: stateInfo?.rate ?? 0,
       planToAge: numVal(form.planToAge),
@@ -303,6 +398,132 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     })
     return { ...result, projectionYears }
   }, [form, birthYear, startYear, irmaaTargetTier, conversionWindow, taxFiling, sex, spouseBirthYear, spouseSex, brokerageIraTotal, brokerageRothTotal, stateInfo, effectiveSpouseBirthYear])
+
+  // Scenario comparison — all 4 aggressiveness tiers with their own comparisonWindow
+  const scenarioComparison = useMemo(() => {
+    const ssStart = numVal(form.ssStartYear)
+    const rmdStart = (birthYear ?? 0) > 0 ? (birthYear! + 73) : 9999
+    const convStop =
+      comparisonWindow === 'before-ss'  ? (ssStart || 9999) :
+      comparisonWindow === 'before-rmd' ? rmdStart :
+      9999
+    const projYears = computeProjectionYears(
+      birthYear ?? 0, effectiveSpouseBirthYear, startYear, sex, spouseSex,
+      numVal(form.planToAge), numVal(form.spousePlanToAge),
+    )
+    const base: TaxInputs = {
+      w2Income: numVal(form.w2Income), interestIncome: numVal(form.interestIncome),
+      dividendIncome: numVal(form.dividendIncome), capGainsDist: numVal(form.capGainsDist),
+      stcg: numVal(form.stcg), ltcg: numVal(form.ltcg), otherIncome: numVal(form.otherIncome),
+      iraBalance: brokerageIraTotal + numVal(form.iraBalance), iraWithdrawals: 0,
+      qcdPct: numVal(form.qcds), rothBalance: brokerageRothTotal + numVal(form.rothBalance),
+      portfolioGrowthPct: numVal(form.portfolioGrowthPct), retirementYear: numVal(form.retirementYear),
+      ssStartYear: ssStart,
+      ssPaymentsPerYear: computedPrimarySsAnnual ?? numVal(form.ssPaymentsPerYear),
+      inflationPct: numVal(form.inflationPct),
+      medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
+      medicareStartYear: numVal(form.medicareStartYear), filing: taxFiling,
+      birthYear: birthYear ?? 0, startYear, projectionYears: projYears,
+      irmaaTargetTier: 0, conversionStopYear: convStop, sex,
+      spouseBirthYear: effectiveSpouseBirthYear ?? 0,
+      spouseSsStartYear: numVal(form.spouseSsStartYear),
+      spouseSsPaymentsPerYear: computedSpouseSsAnnual ?? numVal(form.spouseSsPaymentsPerYear),
+      spouseSex, stateTaxRate: stateInfo?.rate ?? 0,
+      planToAge: numVal(form.planToAge), spousePlanToAge: numVal(form.spousePlanToAge),
+      annualDeferredContrib: numVal(form.annualDeferredContrib),
+      annualRothContrib: numVal(form.annualRothContrib),
+      annualEmployerMatch: numVal(form.w2Income) * numVal(form.employerMatchPct) / 100,
+      spouseAnnualDeferredContrib: numVal(form.spouseAnnualDeferredContrib),
+      spouseAnnualRothContrib: numVal(form.spouseAnnualRothContrib),
+      spouseAnnualEmployerMatch: numVal(form.w2Income) * numVal(form.spouseEmployerMatchPct) / 100,
+    }
+    const r0 = projectTaxes({ ...base, irmaaTargetTier: 0 })
+    const r1 = projectTaxes({ ...base, irmaaTargetTier: 1 })
+    const r2 = projectTaxes({ ...base, irmaaTargetTier: 2 })
+    function calcBreakeven(r: typeof r0): number | null {
+      let running = 0
+      for (let i = 0; i < r.optimizedRows.length; i++) {
+        running += (r.baselineRows[i]?.totalCost ?? 0) - r.optimizedRows[i].totalCost
+        if (running >= 0) return r.optimizedRows[i].year
+      }
+      return null
+    }
+    // Run a full cash-flow simulation to get final IRA/Roth after expense drawdowns
+    // (mirrors fundingProjection logic so cards agree with the charts)
+    const growthRate = numVal(form.portfolioGrowthPct) / 100
+    const inflation = numVal(form.inflationPct) / 100
+    const baseExpenses = numVal(form.annualLivingExpenses)
+    const retYear = numVal(form.retirementYear)
+    const annualIraContribs = numVal(form.annualDeferredContrib)
+      + numVal(form.w2Income) * numVal(form.employerMatchPct) / 100
+      + numVal(form.spouseAnnualDeferredContrib)
+      + numVal(form.w2Income) * numVal(form.spouseEmployerMatchPct) / 100
+    const annualRothContribs = numVal(form.annualRothContrib) + numVal(form.spouseAnnualRothContrib)
+    const totalIraStart = brokerageIraTotal + numVal(form.iraBalance)
+    const totalRothStart = brokerageRothTotal + numVal(form.rothBalance)
+    const totalTaxableStart = brokerageTaxableTotal + numVal(form.taxableBalance)
+    function simulateFinalBalances(rows: typeof r0.optimizedRows): { finalIra: number; finalRoth: number } {
+      let ira = totalIraStart, roth = totalRothStart, taxable = totalTaxableStart
+      for (const row of rows) {
+        const afterTaxRate = Math.max(0, 1 - row.effectiveRatePct / 100)
+        const isPreRet = row.year < retYear
+        if (isPreRet) { ira += annualIraContribs; roth += annualRothContribs }
+        ira = ira * (1 + growthRate)
+        roth = roth * (1 + growthRate)
+        const rmdOut = Math.min(row.rmd, ira)
+        const convOut = Math.min(row.rothConversion, Math.max(0, ira - rmdOut))
+        ira = Math.max(0, ira - rmdOut - convOut)
+        roth += convOut
+        taxable = taxable * (1 + growthRate)
+        const yearsElapsed = row.year - startYear
+        const expenses = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsed) : 0
+        const taxableRmd = !isPreRet && row.rmd > 0 ? rmdOut * (row.iraWithdrawal / row.rmd) : 0
+        const afterTaxIncome = isPreRet ? row.w2 * afterTaxRate : taxableRmd * afterTaxRate + row.ss * afterTaxRate
+        const netCash = isPreRet ? afterTaxIncome - annualRothContribs - expenses : afterTaxIncome - expenses
+        taxable += netCash
+        if (taxable < 0 && ira > 0 && afterTaxRate > 0) {
+          const iraDraw = Math.min(-taxable / afterTaxRate, ira)
+          ira = Math.max(0, ira - iraDraw)
+          taxable += iraDraw * afterTaxRate
+        }
+        if (taxable < 0 && roth > 0) {
+          const rothDraw = Math.min(-taxable, roth)
+          roth = Math.max(0, roth - rothDraw)
+          taxable += rothDraw
+        }
+        taxable = Math.max(0, taxable)
+      }
+      return { finalIra: Math.round(ira), finalRoth: Math.round(roth) }
+    }
+    const sim0base = simulateFinalBalances(r0.baselineRows)
+    const sim0 = simulateFinalBalances(r0.optimizedRows)
+    const sim1 = simulateFinalBalances(r1.optimizedRows)
+    const sim2 = simulateFinalBalances(r2.optimizedRows)
+    return [
+      { tier: -1 as const, label: 'No Conversion',
+        totalCost: r0.summary.baselineTotalCost, totalTax: r0.summary.baselineTotalTax,
+        totalIrmaa: r0.summary.baselineTotalIrmaa, netSavings: 0,
+        breakevenYear: null as number | null, totalRothConverted: 0,
+        finalIra: sim0base.finalIra, finalRoth: sim0base.finalRoth },
+      { tier: 0 as const, label: 'Conservative',
+        totalCost: r0.summary.optimizedTotalCost, totalTax: r0.summary.optimizedTotalTax,
+        totalIrmaa: r0.summary.optimizedTotalIrmaa, netSavings: r0.summary.lifetimeSavings,
+        breakevenYear: calcBreakeven(r0), totalRothConverted: r0.summary.totalRothConverted,
+        finalIra: sim0.finalIra, finalRoth: sim0.finalRoth },
+      { tier: 1 as const, label: 'Moderate',
+        totalCost: r1.summary.optimizedTotalCost, totalTax: r1.summary.optimizedTotalTax,
+        totalIrmaa: r1.summary.optimizedTotalIrmaa, netSavings: r1.summary.lifetimeSavings,
+        breakevenYear: calcBreakeven(r1), totalRothConverted: r1.summary.totalRothConverted,
+        finalIra: sim1.finalIra, finalRoth: sim1.finalRoth },
+      { tier: 2 as const, label: 'Aggressive',
+        totalCost: r2.summary.optimizedTotalCost, totalTax: r2.summary.optimizedTotalTax,
+        totalIrmaa: r2.summary.optimizedTotalIrmaa, netSavings: r2.summary.lifetimeSavings,
+        breakevenYear: calcBreakeven(r2), totalRothConverted: r2.summary.totalRothConverted,
+        finalIra: sim2.finalIra, finalRoth: sim2.finalRoth },
+    ]
+  }, [form, birthYear, startYear, comparisonWindow, taxFiling, sex, spouseBirthYear, spouseSex,
+    brokerageIraTotal, brokerageRothTotal, brokerageTaxableTotal, stateInfo, effectiveSpouseBirthYear,
+    computedPrimarySsAnnual, computedSpouseSsAnnual])
 
   // Cheap derivation — switches instantly when the toggle changes
   const activeRows = showConversions ? optimizedRows : baselineRows
@@ -345,9 +566,10 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     return null
   })()
 
-  // Funding projection: tracks all three account types year-by-year with priority drawdown.
-  // Taxable absorbs after-tax RMDs and funds expenses first; Roth is drawn last.
-  // IRA balance comes from the tax engine (depleted by RMDs and Roth conversions).
+  // Funding projection: tracks all three account types as running balances year-by-year.
+  // IRA and Roth are tracked independently (not from the engine) so that once a balance
+  // reaches zero it stays zero — the "drawdown offset" approach caused phantom recovery
+  // because the engine's balance kept growing while our offset stayed fixed.
   const fundingProjection = useMemo(() => {
     const totalTaxableStart = brokerageTaxableTotal + numVal(form.taxableBalance)
     const totalRothStart = brokerageRothTotal + numVal(form.rothBalance)
@@ -355,98 +577,224 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
     const growthRate = numVal(form.portfolioGrowthPct) / 100
     const inflation = numVal(form.inflationPct) / 100
     const baseExpenses = numVal(form.annualLivingExpenses)
+    const retYear = numVal(form.retirementYear)
+    // Annual pre-retirement contributions (mirror the engine's inputs)
+    const annualIraContribs = numVal(form.annualDeferredContrib)
+      + numVal(form.w2Income) * numVal(form.employerMatchPct) / 100
+      + numVal(form.spouseAnnualDeferredContrib)
+      + numVal(form.w2Income) * numVal(form.spouseEmployerMatchPct) / 100
+    const annualRothContribs = numVal(form.annualRothContrib) + numVal(form.spouseAnnualRothContrib)
+
+    // Simulate the projection with tweaked starting taxable, expense multiplier, and retirement delay.
+    // Returns true if any year has unfunded expenses (plan fails).
+    // Cash-flow model:
+    //   Pre-retirement : net = after-tax W2 − Roth contributions − expenses  (W2 funds living costs)
+    //   Post-retirement: net = after-tax RMDs + after-tax SS − expenses
+    //   net > 0 → surplus into taxable; net < 0 → draw from taxable, then IRA, then Roth
+    //   expMultiplier scales only post-retirement expenses (binary search target).
+    function simulationFails(extraTaxable: number, expMultiplier: number, retYearDelay = 0): boolean {
+      let t = totalTaxableStart + extraTaxable
+      let ir = totalIraStart
+      let ro = totalRothStart
+      for (const row of activeRows) {
+        const yearsElapsed = row.year - startYear
+        const atr = Math.max(0, 1 - row.effectiveRatePct / 100)
+        const isPreRet = row.year < retYear + retYearDelay
+        // IRA/Roth: contributions before growth (matching engine order)
+        if (isPreRet) { ir += annualIraContribs; ro += annualRothContribs }
+        ir = ir * (1 + growthRate)
+        ro = ro * (1 + growthRate)
+        // Forced IRA outflows: RMDs and Roth conversions
+        const rmdOut = Math.min(row.rmd, ir)
+        const convOut = Math.min(row.rothConversion, Math.max(0, ir - rmdOut))
+        ir = Math.max(0, ir - rmdOut - convOut)
+        ro += convOut
+        // Taxable grows independently
+        t = t * (1 + growthRate)
+        // Net cash flow into/out of taxable
+        let net: number
+        if (isPreRet) {
+          const exp = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsed) : 0
+          net = row.w2 * atr - annualRothContribs - exp
+        } else {
+          const exp = baseExpenses > 0 ? baseExpenses * expMultiplier * Math.pow(1 + inflation, yearsElapsed) : 0
+          const taxableRmd = row.rmd > 0 ? rmdOut * (row.iraWithdrawal / row.rmd) : 0
+          net = taxableRmd * atr + row.ss * atr - exp
+        }
+        t += net
+        if (t < 0 && ir > 0 && atr > 0) { const d = Math.min(-t / atr, ir); ir = Math.max(0, ir - d); t += d * atr }
+        if (t < 0 && ro > 0) { const d = Math.min(-t, ro); ro = Math.max(0, ro - d); t += d }
+        if (t < 0) return true
+        t = Math.max(0, t)
+      }
+      return false
+    }
+
     let taxable = totalTaxableStart
-    // Track only the cumulative Roth withdrawals taken to cover expense shortfalls;
-    // the engine's rothBalanceEnd already accounts for portfolio growth + conversions.
-    let rothExpenseDrawdown = 0
+    let ira = totalIraStart
+    let roth = totalRothStart
     let depletionYear: number | null = null
-    const data: Array<{ year: number; age: number; taxable: number; ira: number; roth: number; expenses: number; taxes: number; irmaa: number; rothConversion: number; ss: number; rmd: number; qcds: number }> = []
+    let firstShortfallYear: number | null = null
+    const data: Array<{ year: number; age: number; taxable: number; ira: number; roth: number; expenses: number; taxes: number; irmaa: number; rothConversion: number; ss: number; rmd: number; qcds: number; w2: number; afterTaxIncome: number }> = []
     for (const row of activeRows) {
       const yearsElapsed = row.year - startYear
       const expenses = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsed) : 0
       const afterTaxRate = Math.max(0, 1 - row.effectiveRatePct / 100)
-      // row.iraWithdrawal = rmd − qcdsActual: gross IRA cash that lands in the taxable account.
-      // QCDs go directly from IRA to charity and are already excluded here.
-      const afterTaxRmd = row.iraWithdrawal > 0 ? row.iraWithdrawal * afterTaxRate : 0
-      // SS payments deposit into the taxable account; after-tax portion net of effective rate.
-      const afterTaxSS  = row.ss > 0 ? row.ss * afterTaxRate : 0
-      // Taxable: grows at portfolio rate, gains after-tax RMDs and SS, funds expenses
-      taxable = taxable * (1 + growthRate) + afterTaxRmd + afterTaxSS - expenses
-      // IRA + Roth balances come directly from the engine, which applies portfolio
-      // growth, RMDs, and Roth conversions authoritatively each year.
-      const ira = Math.max(0, row.iraBalanceEnd)
-      const rothFromEngine = Math.max(0, row.rothBalanceEnd)
-      // When taxable can't cover expenses, draw from Roth last
-      if (taxable < 0) {
-        const shortfall = -taxable
-        const rothAvail = Math.max(0, rothFromEngine - rothExpenseDrawdown)
-        const withdrawal = Math.min(shortfall, rothAvail)
-        rothExpenseDrawdown += withdrawal
-        taxable = 0
+      const isPreRetirement = row.year < retYear
+      // IRA/Roth: contributions before growth (matching engine order)
+      if (isPreRetirement) {
+        ira += annualIraContribs
+        roth += annualRothContribs
       }
-      const roth = Math.max(0, rothFromEngine - rothExpenseDrawdown)
+      ira = ira * (1 + growthRate)
+      roth = roth * (1 + growthRate)
+      // Forced IRA outflows: RMDs and Roth conversions
+      const rmdOut = Math.min(row.rmd, ira)
+      const convOut = Math.min(row.rothConversion, Math.max(0, ira - rmdOut))
+      ira = Math.max(0, ira - rmdOut - convOut)
+      roth += convOut
+      // Taxable grows independently
+      taxable = taxable * (1 + growthRate)
+      // Net cash flow into/out of taxable:
+      //   Pre-retirement : after-tax W2 minus Roth contributions minus expenses
+      //                    (W2 covers living costs; Roth contributions come from take-home pay)
+      //   Post-retirement: after-tax RMDs (net of QCDs) + after-tax SS minus expenses
+      const taxableRmd = !isPreRetirement && row.rmd > 0 ? rmdOut * (row.iraWithdrawal / row.rmd) : 0
+      const afterTaxIncome = isPreRetirement
+        ? row.w2 * afterTaxRate
+        : taxableRmd * afterTaxRate + row.ss * afterTaxRate
+      const netCash = isPreRetirement
+        ? afterTaxIncome - annualRothContribs - expenses
+        : afterTaxIncome - expenses
+      taxable += netCash
+      // Shortfall: draw from IRA first (gross → after-tax), then Roth (tax-free)
+      if (taxable < 0 && ira > 0 && afterTaxRate > 0) {
+        const iraDraw = Math.min(-taxable / afterTaxRate, ira)
+        ira = Math.max(0, ira - iraDraw)
+        taxable += iraDraw * afterTaxRate
+      }
+      if (taxable < 0 && roth > 0) {
+        const rothDraw = Math.min(-taxable, roth)
+        roth = Math.max(0, roth - rothDraw)
+        taxable += rothDraw
+      }
+      // Any remaining gap = unfunded expenses
+      const unfunded = Math.max(0, -taxable)
+      if (unfunded > 0 && firstShortfallYear === null) firstShortfallYear = row.year
+      taxable = Math.max(0, taxable)
+      // Cap displayed expenses to what was actually funded
+      const fundedExpenses = Math.max(0, expenses - unfunded)
       if (taxable === 0 && ira === 0 && roth === 0 && depletionYear === null) {
         depletionYear = row.year
       }
       data.push({
         year: row.year, age: row.age,
         taxable: Math.round(taxable), ira: Math.round(ira), roth: Math.round(roth),
-        expenses: Math.round(expenses), taxes: Math.round(row.totalTax), irmaa: Math.round(row.irmaaAnnual),
+        expenses: Math.round(fundedExpenses), taxes: Math.round(row.totalTax), irmaa: Math.round(row.irmaaAnnual),
         rothConversion: Math.round(row.rothConversion),
         ss: Math.round(row.ss), rmd: Math.round(row.rmd), qcds: Math.round(row.qcdsActual ?? 0),
+        w2: Math.round(row.w2), afterTaxIncome: Math.round(afterTaxIncome),
       })
     }
+
+    // Binary search: how much additional taxable savings fixes the plan?
+    let additionalSavingsNeeded: number | null = null
+    // Binary search: how much must annual expenses drop (in today's dollars) to fix the plan?
+    let expenseReductionNeeded: number | null = null
+    // Linear scan: how many extra years of work fixes the plan (max 20)?
+    let retirementDelayYears: number | null = null
+    if (firstShortfallYear !== null) {
+      // Savings: search 0 → $20M
+      const savingsMax = 20_000_000
+      if (!simulationFails(savingsMax, 1)) {
+        let lo = 0, hi = savingsMax
+        for (let i = 0; i < 40; i++) {
+          const mid = (lo + hi) / 2
+          if (simulationFails(mid, 1)) lo = mid; else hi = mid
+        }
+        additionalSavingsNeeded = Math.ceil(hi / 1000) * 1000
+      }
+      // Expenses: search multiplier 0 → 1; find the highest that still works
+      if (!simulationFails(0, 0)) {
+        let lo = 0, hi = 1
+        for (let i = 0; i < 40; i++) {
+          const mid = (lo + hi) / 2
+          if (simulationFails(0, mid)) hi = mid; else lo = mid
+        }
+        // lo = highest multiplier where plan just barely works
+        expenseReductionNeeded = Math.ceil(baseExpenses * (1 - lo) / 100) * 100
+      } else {
+        // Even $0 expenses fails (taxes/IRMAA alone exceed income)
+        expenseReductionNeeded = baseExpenses
+      }
+      // Retirement delay: scan 1–20 extra years of contributions
+      for (let delay = 1; delay <= 20; delay++) {
+        if (!simulationFails(0, 1, delay)) {
+          retirementDelayYears = delay
+          break
+        }
+      }
+    }
+
+    // Baseline balance simulation for the IRA & Roth comparison chart.
+    // Mirrors the main simulation but runs on baselineRows (no conversions) so that
+    // expense drawdowns are reflected consistently in both chart lines.
+    let bIra = totalIraStart
+    let bRoth = totalRothStart
+    let bTaxable = totalTaxableStart
+    const baselineBalanceData: Array<{ year: number; ira: number; roth: number }> = []
+    for (const row of baselineRows) {
+      const afterTaxRate = Math.max(0, 1 - row.effectiveRatePct / 100)
+      const isPreRet = row.year < retYear
+      if (isPreRet) { bIra += annualIraContribs; bRoth += annualRothContribs }
+      bIra = bIra * (1 + growthRate)
+      bRoth = bRoth * (1 + growthRate)
+      const bRmdOut = Math.min(row.rmd, bIra)
+      bIra = Math.max(0, bIra - bRmdOut)
+      bTaxable = bTaxable * (1 + growthRate)
+      const yearsElapsedB = row.year - startYear
+      const expensesB = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsedB) : 0
+      const taxableRmdB = !isPreRet && row.rmd > 0 ? bRmdOut * (row.iraWithdrawal / row.rmd) : 0
+      const afterTaxIncomeB = isPreRet ? row.w2 * afterTaxRate : taxableRmdB * afterTaxRate + row.ss * afterTaxRate
+      const netCashB = isPreRet ? afterTaxIncomeB - annualRothContribs - expensesB : afterTaxIncomeB - expensesB
+      bTaxable += netCashB
+      if (bTaxable < 0 && bIra > 0 && afterTaxRate > 0) {
+        const iraDraw = Math.min(-bTaxable / afterTaxRate, bIra)
+        bIra = Math.max(0, bIra - iraDraw)
+        bTaxable += iraDraw * afterTaxRate
+      }
+      if (bTaxable < 0 && bRoth > 0) {
+        const rothDraw = Math.min(-bTaxable, bRoth)
+        bRoth = Math.max(0, bRoth - rothDraw)
+        bTaxable += rothDraw
+      }
+      bTaxable = Math.max(0, bTaxable)
+      baselineBalanceData.push({ year: row.year, ira: Math.round(bIra), roth: Math.round(bRoth) })
+    }
+
     const lastRow = data[data.length - 1]
     return {
       data,
+      baselineBalanceData,
       startTaxable: totalTaxableStart, startIra: totalIraStart, startRoth: totalRothStart,
       endTaxable: lastRow?.taxable ?? 0, endIra: lastRow?.ira ?? 0, endRoth: lastRow?.roth ?? 0,
       depletionYear,
+      firstShortfallYear,
+      additionalSavingsNeeded,
+      expenseReductionNeeded,
+      retirementDelayYears,
     }
-  }, [activeRows, brokerageIraTotal, brokerageRothTotal, brokerageTaxableTotal, form.iraBalance, form.rothBalance, form.taxableBalance, form.annualLivingExpenses, form.portfolioGrowthPct, form.inflationPct, startYear])
-  // Note: totalRothStart is used only for the startRoth stat; the Roth bars come from row.rothBalanceEnd
+  }, [activeRows, baselineRows, brokerageIraTotal, brokerageRothTotal, brokerageTaxableTotal, form.iraBalance, form.rothBalance, form.taxableBalance, form.annualLivingExpenses, form.portfolioGrowthPct, form.inflationPct, form.retirementYear, form.annualDeferredContrib, form.annualRothContrib, form.employerMatchPct, form.spouseAnnualDeferredContrib, form.spouseAnnualRothContrib, form.spouseEmployerMatchPct, form.w2Income, startYear])
 
-  // Roth balances adjusted for expense drawdowns after taxable is depleted — computed for both scenarios
-  const rothAdjustedTrajectory = useMemo(() => {
-    function computeRothBalances(rows: ScenarioRow[]): number[] {
-      const growthRate = numVal(form.portfolioGrowthPct) / 100
-      const inflation = numVal(form.inflationPct) / 100
-      const baseExpenses = numVal(form.annualLivingExpenses)
-      let taxable = brokerageTaxableTotal + numVal(form.taxableBalance)
-      let roth = brokerageRothTotal + numVal(form.rothBalance)
-      const out: number[] = []
-      for (const row of rows) {
-        const yearsElapsed = row.year - startYear
-        const expenses = baseExpenses > 0 ? baseExpenses * Math.pow(1 + inflation, yearsElapsed) : 0
-        const afterTaxRmd = row.rmd > 0
-          ? (row.rmd - (row.qcdsActual ?? 0)) * Math.max(0, 1 - row.effectiveRatePct / 100)
-          : 0
-        taxable = taxable * (1 + growthRate) + afterTaxRmd - expenses
-        roth = roth * (1 + growthRate) + row.rothConversion
-        if (taxable < 0) {
-          const withdrawal = Math.min(-taxable, roth)
-          roth = Math.max(0, roth - withdrawal)
-          taxable = 0
-        }
-        out.push(roth)
-      }
-      return out
-    }
+  const balanceChartData = fundingProjection.data.map((row, i) => {
+    const bRow = fundingProjection.baselineBalanceData[i]
     return {
-      baseline: computeRothBalances(baselineRows),
-      optimized: computeRothBalances(optimizedRows),
-    }
-  }, [baselineRows, optimizedRows, brokerageTaxableTotal, brokerageRothTotal, form.taxableBalance, form.rothBalance, form.annualLivingExpenses, form.portfolioGrowthPct, form.inflationPct, startYear])
-
-  const balanceChartData = baselineRows.map((bRow, i) => {
-    const oRow = optimizedRows[i]
-    return {
-      year: bRow.year,
-      age: bRow.age,
-      baselineIra: bRow.iraBalanceEnd,
-      optimizedIra: oRow?.iraBalanceEnd ?? 0,
-      baselineRoth: rothAdjustedTrajectory.baseline[i] ?? 0,
-      optimizedRoth: rothAdjustedTrajectory.optimized[i] ?? 0,
+      year: row.year,
+      age: row.age,
+      baselineIra: bRow?.ira ?? 0,
+      optimizedIra: row.ira,
+      baselineRoth: bRow?.roth ?? 0,
+      optimizedRoth: row.roth,
     }
   })
 
@@ -482,9 +830,11 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             portfolioGrowthPct: numVal(form.portfolioGrowthPct),
             retirementYear: numVal(form.retirementYear),
             ssStartYear: numVal(form.ssStartYear),
-            ssPaymentsPerYear: numVal(form.ssPaymentsPerYear),
+            ssPaymentsPerYear: computedPrimarySsAnnual ?? numVal(form.ssPaymentsPerYear),
+            ssMonthlyFraBenefit: numVal(form.ssMonthlyFraBenefit),
             spouseSsStartYear: numVal(form.spouseSsStartYear) || null,
-            spouseSsPaymentsPerYear: numVal(form.spouseSsPaymentsPerYear),
+            spouseSsPaymentsPerYear: computedSpouseSsAnnual ?? numVal(form.spouseSsPaymentsPerYear),
+            spouseSsMonthlyFraBenefit: numVal(form.spouseSsMonthlyFraBenefit),
             inflationPct: numVal(form.inflationPct),
             medicareEnrollees: form.medicareEnrollees === '2' ? 2 : 1,
             medicareStartYear: numVal(form.medicareStartYear),
@@ -787,30 +1137,127 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                   <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
                     <span className="flex items-center">Social Security{ssNeedsInput && <NeedsInputBadge />}</span>
                   </AccordionTrigger>
-                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
-                    <div>
-                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                        <NumberInput id="ssStartYear" label="Your SS Start Year" value={form.ssStartYear} onChange={set('ssStartYear')} step="1" prefix="" min="2020" />
-                        <NumberInput id="ssPaymentsPerYear" label="Your SS Amount / Year" value={form.ssPaymentsPerYear} onChange={set('ssPaymentsPerYear')} highlight={ssNeedsInput} />
+                  <AccordionContent className="px-4 pt-4 pb-5">
+                    <div className="space-y-4">
+                      <div className={`grid gap-6 ${isJoint ? 'sm:grid-cols-2' : 'sm:grid-cols-1 max-w-sm'}`}>
+                        {/* You */}
+                        <div className="space-y-3">
+                          {isJoint && <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">You</p>}
+                          <div className="space-y-1">
+                            <NumberInput id="ssStartYear" label="SS Start Year" value={form.ssStartYear} onChange={set('ssStartYear')} step="1" prefix="" min="2020" />
+                            {birthYear && ssStartYr > 0 && (
+                              <p className="text-xs text-muted-foreground pl-0.5">
+                                Age {ssStartYr - birthYear} at SS start
+                                {primaryPastFraNow
+                                  ? <> · <span className="text-amber-600 dark:text-amber-400">Past FRA</span> — statement shows year-by-year amounts</>
+                                  : primarySsAdjPct !== null && (
+                                    <> · FRA {fraDisplay(birthYear)} · <span className={primarySsAdjPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{primarySsAdjPct >= 0 ? '+' : ''}{primarySsAdjPct.toFixed(1)}%</span></>
+                                  )
+                                }
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <NumberInput
+                              id="ssMonthlyFraBenefit"
+                              label={primaryPastFraNow ? `Monthly Benefit at Start Year` : 'FRA Monthly Benefit'}
+                              value={form.ssMonthlyFraBenefit}
+                              onChange={set('ssMonthlyFraBenefit')}
+                              highlight={ssNeedsInput}
+                            />
+                            <p className="text-xs text-muted-foreground pl-0.5">
+                              {primaryPastFraNow
+                                ? <>From your SSA statement, find the amount for {ssStartYr > 0 ? ssStartYr : 'your start year'} (today&apos;s $)</>
+                                : <>Your benefit at FRA, from your SSA statement (today&apos;s $)</>
+                              }
+                            </p>
+                          </div>
+                          {computedPrimarySsAnnual !== null ? (
+                            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs space-y-0.5">
+                              <p className="text-muted-foreground">Estimated annual benefit at start</p>
+                              <p className="text-base font-bold tabular-nums">{fmtCurrency(computedPrimarySsAnnual)}</p>
+                              {primarySsColaYrs > 0 && <p className="text-muted-foreground">Includes {primarySsColaYrs}-yr COLA at {numVal(form.inflationPct)}%/yr</p>}
+                            </div>
+                          ) : (
+                            <NumberInput id="ssPaymentsPerYear" label="SS Amount / Year (manual)" value={form.ssPaymentsPerYear} onChange={set('ssPaymentsPerYear')} />
+                          )}
+                        </div>
+
+                        {/* Spouse */}
                         {isJoint && (
-                          <>
-                            <NumberInput id="spouseSsStartYear" label="Spouse SS Start Year" value={form.spouseSsStartYear} onChange={set('spouseSsStartYear')} step="1" prefix="" min="2020" />
-                            <NumberInput id="spouseSsPaymentsPerYear" label="Spouse SS Amount / Year" value={form.spouseSsPaymentsPerYear} onChange={set('spouseSsPaymentsPerYear')} />
-                            {!spouseBirthYear && (
-                              <div className="sm:col-span-2 md:col-span-3">
-                                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                                  <p className="text-xs text-amber-800 dark:text-amber-400 flex-1 min-w-0">
-                                    <strong>Spouse birth year missing</strong> — needed to model the first-death transition and joint life expectancy.{' '}
-                                    <a href="/account" className="underline hover:no-underline">Save it in Account</a> or enter below for this session only.
+                          <div className="space-y-3">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spouse</p>
+                            <div className="space-y-1">
+                              <div className="space-y-1">
+                                <NumberInput id="spouseSsStartYear" label="SS Start Year" value={form.spouseSsStartYear} onChange={set('spouseSsStartYear')} step="1" prefix="" min="2020" />
+                                {effectiveSpouseBirthYear && spouseSsStartYr > 0 && (
+                                  <p className="text-xs text-muted-foreground pl-0.5">
+                                    Age {spouseSsStartYr - effectiveSpouseBirthYear} at SS start
+                                    {spousePastFraNow
+                                      ? <> · <span className="text-amber-600 dark:text-amber-400">Past FRA</span> — statement shows year-by-year amounts</>
+                                      : spouseSsAdjPct !== null && (
+                                        <> · FRA {fraDisplay(effectiveSpouseBirthYear)} · <span className={spouseSsAdjPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{spouseSsAdjPct >= 0 ? '+' : ''}{spouseSsAdjPct.toFixed(1)}%</span></>
+                                      )
+                                    }
                                   </p>
-                                  <div className="w-36 shrink-0">
-                                    <NumberInput id="spouseBirthYearOverride" label="Spouse Birth Year" value={form.spouseBirthYearOverride} onChange={set('spouseBirthYearOverride')} step="1" prefix="" min="1930" />
-                                  </div>
-                                </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <NumberInput
+                                id="spouseSsMonthlyFraBenefit"
+                                label={spousePastFraNow ? 'Spouse Monthly Benefit at Start Year' : 'Spouse FRA Monthly Benefit'}
+                                value={form.spouseSsMonthlyFraBenefit}
+                                onChange={set('spouseSsMonthlyFraBenefit')}
+                              />
+                              <p className="text-xs text-muted-foreground pl-0.5">
+                                {spousePastFraNow
+                                  ? <>From spouse&apos;s SSA statement, find the amount for {spouseSsStartYr > 0 ? spouseSsStartYr : 'their start year'} (today&apos;s $)</>
+                                  : <>Spouse&apos;s benefit at FRA, from SSA statement (today&apos;s $)</>
+                                }
+                              </p>
+                            </div>
+                            {computedSpouseSsAnnual !== null ? (
+                              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs space-y-0.5">
+                                <p className="text-muted-foreground">Estimated annual benefit at start</p>
+                                <p className="text-base font-bold tabular-nums">{fmtCurrency(computedSpouseSsAnnual)}</p>
+                                {spouseSsColaYrs > 0 && <p className="text-muted-foreground">Includes {spouseSsColaYrs}-yr COLA at {numVal(form.inflationPct)}%/yr</p>}
+                              </div>
+                            ) : (
+                              <NumberInput id="spouseSsPaymentsPerYear" label="Spouse SS Amount / Year (manual)" value={form.spouseSsPaymentsPerYear} onChange={set('spouseSsPaymentsPerYear')} />
+                            )}
+                            {!spouseBirthYear && (
+                              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2 space-y-2">
+                                <p className="text-xs text-amber-800 dark:text-amber-400">
+                                  <strong>Spouse birth year missing</strong> — needed to model the first-death transition and joint life expectancy.{' '}
+                                  <a href="/account" className="underline hover:no-underline">Save it in Account</a> or enter below for this session only.
+                                </p>
+                                <NumberInput id="spouseBirthYearOverride" label="Spouse Birth Year" value={form.spouseBirthYearOverride} onChange={set('spouseBirthYearOverride')} step="1" prefix="" min="1930" />
                               </div>
                             )}
-                          </>
+                          </div>
                         )}
+                      </div>
+
+                      {/* SSA note */}
+                      <div className="rounded-md border px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+                        {(primaryPastFraNow || (isJoint && spousePastFraNow)) ? (
+                          <p>
+                            <strong>Past FRA:</strong> your <strong>Social Security Statement</strong> shows estimated monthly benefits
+                            year-by-year from your current age to 70 — enter the amount for your planned start year.{' '}
+                            <strong>Before FRA:</strong> the statement shows your FRA benefit — enter that amount.
+                          </p>
+                        ) : (
+                          <p>
+                            Your <strong>FRA benefit</strong> is shown on your <strong>Social Security Statement</strong> — we adjust it
+                            for your claiming age and project forward with COLA.
+                          </p>
+                        )}
+                        <p>
+                          Create a free account at{' '}
+                          <a href="https://www.ssa.gov/myaccount/" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline font-medium">ssa.gov/myaccount</a>{' '}
+                          to view your personalized estimate, verify your earnings record, and download your statement.
+                        </p>
                       </div>
                     </div>
                   </AccordionContent>
@@ -888,17 +1335,22 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                         <div>
                           <NumberInput id="annualDeferredContrib" label="Tax-Deferred / Year (401k + IRA)" value={form.annualDeferredContrib} onChange={set('annualDeferredContrib')} step="500" />
-                          <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k</p>
+                          <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k + $7,000 IRA</p>
                         </div>
                         <div>
                           <NumberInput id="annualRothContrib" label="Roth / Year (Roth 401k + Roth IRA)" value={form.annualRothContrib} onChange={set('annualRothContrib')} step="500" />
-                          <p className="text-xs text-muted-foreground mt-1">2026 IRA limit: $7,000 ($8,000 if 50+)</p>
+                          <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for Roth 401k + $7,000 Roth IRA</p>
                         </div>
                         <div>
                           <NumberInput id="employerMatchPct" label="Employer Match (% of W2)" value={form.employerMatchPct} onChange={set('employerMatchPct')} step="0.5" prefix="" suffix="%" />
                           <p className="text-xs text-muted-foreground mt-1">e.g. 4 if company matches 100% up to 4% of salary</p>
                         </div>
                       </div>
+                      {primaryContribOver && (
+                        <p className="text-xs text-destructive mt-2">
+                          Combined deferred + Roth (${primaryContribTotal.toLocaleString()}) exceeds the 2026 IRS limit of ${primaryContribLimit.toLocaleString()} {primaryAge >= 50 ? '(age 50+ catch-up included)' : `($${contribLimit(50).toLocaleString()} if 50+)`}.
+                        </p>
+                      )}
                     </div>
 
                     {isJoint && (
@@ -907,15 +1359,21 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                           <div>
                             <NumberInput id="spouseAnnualDeferredContrib" label="Spouse Tax-Deferred / Year" value={form.spouseAnnualDeferredContrib} onChange={set('spouseAnnualDeferredContrib')} step="500" />
-                            <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k</p>
+                            <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k + $7,000 IRA</p>
                           </div>
                           <div>
                             <NumberInput id="spouseAnnualRothContrib" label="Spouse Roth / Year" value={form.spouseAnnualRothContrib} onChange={set('spouseAnnualRothContrib')} step="500" />
+                            <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for Roth 401k + $7,000 Roth IRA</p>
                           </div>
                           <div>
                             <NumberInput id="spouseEmployerMatchPct" label="Spouse Employer Match (% of W2)" value={form.spouseEmployerMatchPct} onChange={set('spouseEmployerMatchPct')} step="0.5" prefix="" suffix="%" />
                           </div>
                         </div>
+                        {spouseContribOver && (
+                          <p className="text-xs text-destructive mt-2">
+                            Spouse combined deferred + Roth (${spouseContribTotal.toLocaleString()}) exceeds the 2026 IRS limit of ${spouseContribLimit.toLocaleString()} {spouseAge >= 50 ? '(age 50+ catch-up included)' : `($${contribLimit(50).toLocaleString()} if 50+)`}.
+                          </p>
+                        )}
                       </div>
                     )}
                   </AccordionContent>
@@ -941,30 +1399,42 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
               <div>
                 <NumberInput id="retirementYear" label="Retirement Year" value={form.retirementYear} onChange={set('retirementYear')} step="1" prefix="" min="2020" />
-                <p className="text-xs text-muted-foreground mt-1">W2 / salary income stops after this year. No effect if W2 is $0.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {birthYear && numVal(form.retirementYear) > 0 && <>Age {numVal(form.retirementYear) - birthYear} · </>}
+                  W2 / salary income stops after this year. No effect if W2 is $0.
+                </p>
               </div>
               <NumberInput id="portfolioGrowthPct" label="Portfolio Growth %" value={form.portfolioGrowthPct} onChange={set('portfolioGrowthPct')} step="0.1" prefix="" suffix="%" />
               <NumberInput id="inflationPct" label="Inflation / SS COLA %" value={form.inflationPct} onChange={set('inflationPct')} step="0.1" prefix="" suffix="%" />
               <NumberInput id="qcds" label="QCDs (% of RMD, age 73+)" value={form.qcds} onChange={set('qcds')} step="1" prefix="" suffix="%" min="0" />
               <div className="space-y-1">
-                <Label htmlFor="irmaaTargetTier" className="text-xs text-muted-foreground">Conversion Aggressiveness</Label>
+                <Label htmlFor="irmaaTargetTier" className="text-xs text-muted-foreground">Roth Conversion Aggressiveness</Label>
                 <Select
-                  value={String(irmaaTargetTier)}
-                  onValueChange={(v) => setIrmaaTargetTier(Number(v) as IrmaaTargetTier)}
+                  value={showConversions ? String(irmaaTargetTier) : '-1'}
+                  onValueChange={(v) => {
+                    if (v === '-1') {
+                      setShowConversions(false)
+                    } else {
+                      setShowConversions(true)
+                      setIrmaaTargetTier(Number(v) as IrmaaTargetTier)
+                    }
+                  }}
                 >
                   <SelectTrigger id="irmaaTargetTier" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Conservative — no IRMAA surcharge</SelectItem>
-                    <SelectItem value="1">Moderate — allow Tier 1 IRMAA</SelectItem>
-                    <SelectItem value="2">Aggressive — allow Tier 2 IRMAA</SelectItem>
+                    <SelectItem value="-1">No conversion</SelectItem>
+                    <SelectItem value="0">Conservative — fill to the 12% bracket</SelectItem>
+                    <SelectItem value="1">Moderate — fill to the 22% bracket</SelectItem>
+                    <SelectItem value="2">Aggressive — fill to the 24% bracket</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">Higher tiers convert more now, reducing future RMDs.</p>
+                <p className="text-xs text-muted-foreground mt-1">Each tier converts up to the corresponding tax bracket ceiling (same thresholds as IRMAA tiers). Conversions are included in MAGI and affect taxes each year, but reduce future RMDs. Roth IRA direct contributions (incl. backdoor Roth) are capped at $7k/yr ($8k age 50+) — enter those in Contributions above.</p>
               </div>
+              {showConversions && (
               <div className="space-y-1">
-                <Label htmlFor="conversionWindow" className="text-xs text-muted-foreground">Conversion Window</Label>
+                <Label htmlFor="conversionWindow" className="text-xs text-muted-foreground">Roth Conversion Window</Label>
                 <Select
                   value={conversionWindow}
                   onValueChange={(v) => setConversionWindow(v as 'always' | 'before-ss' | 'before-rmd')}
@@ -978,8 +1448,9 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                     <SelectItem value="before-rmd">Before RMDs (age 73)</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">Limit conversions to the low-income window before SS or RMDs.</p>
+                <p className="text-xs text-muted-foreground mt-1">Controls when conversions stop. &ldquo;Drain IRA&rdquo; converts every year until the IRA is exhausted. The other options end conversions before SS or RMDs arrive and push income up permanently.</p>
               </div>
+              )}
 
               {/* Plan-to-age overrides */}
               {birthYear && (() => {
@@ -1059,8 +1530,8 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             <div className="flex items-baseline justify-between gap-4 flex-wrap">
               <CardTitle className="text-base">Portfolio Balance Trajectory</CardTitle>
               {fundingProjection.depletionYear !== null && (
-                <span className="text-xs font-semibold text-destructive">
-                  ⚠ All sources depleted in {fundingProjection.depletionYear}
+                <span className="text-xs font-semibold text-destructive bg-destructive/10 rounded px-2 py-0.5">
+                  Fully depleted {fundingProjection.depletionYear}
                 </span>
               )}
             </div>
@@ -1098,6 +1569,56 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
           </CardContent>
         </Card>
 
+        {fundingProjection.firstShortfallYear !== null && (
+          <div className="rounded-lg border border-destructive bg-destructive/10 px-4 py-3 text-destructive dark:bg-destructive/20">
+            <p className="text-sm font-semibold">⚠ Plan fails starting {fundingProjection.firstShortfallYear}{fundingProjection.depletionYear !== null ? ` — all sources depleted ${fundingProjection.depletionYear}` : ''}</p>
+            <div className="mt-2 flex flex-col sm:flex-row items-stretch gap-0">
+              <div className="flex-1 rounded bg-destructive/10 px-3 py-2">
+                <p className="text-xs font-medium opacity-80">Additional savings needed today</p>
+                <p className="text-base font-bold tabular-nums mt-0.5">
+                  {fundingProjection.additionalSavingsNeeded !== null ? fmtCurrency(fundingProjection.additionalSavingsNeeded) : '>$20M'}
+                </p>
+                <p className="text-xs opacity-60 mt-0.5">added to taxable accounts</p>
+              </div>
+              <div className="flex items-center justify-center px-2 py-1 sm:py-0">
+                <span className="text-xs font-semibold opacity-50 uppercase tracking-widest">or</span>
+              </div>
+              <div className="flex-1 rounded bg-destructive/10 px-3 py-2">
+                <p className="text-xs font-medium opacity-80">Annual expense reduction needed</p>
+                <p className="text-base font-bold tabular-nums mt-0.5">
+                  {fundingProjection.expenseReductionNeeded !== null ? fmtCurrency(fundingProjection.expenseReductionNeeded) : '—'}
+                </p>
+                <p className="text-xs opacity-60 mt-0.5">in today&apos;s dollars</p>
+              </div>
+              <div className="flex items-center justify-center px-2 py-1 sm:py-0">
+                <span className="text-xs font-semibold opacity-50 uppercase tracking-widest">or</span>
+              </div>
+              <div className="flex-1 rounded bg-destructive/10 px-3 py-2">
+                <p className="text-xs font-medium opacity-80">Delay retirement by</p>
+                {fundingProjection.retirementDelayYears !== null ? (() => {
+                  const newYear = numVal(form.retirementYear) + fundingProjection.retirementDelayYears!
+                  const newAge = birthYear ? newYear - birthYear : null
+                  return (
+                    <>
+                      <p className="text-base font-bold tabular-nums mt-0.5">
+                        {fundingProjection.retirementDelayYears} {fundingProjection.retirementDelayYears === 1 ? 'year' : 'years'}
+                      </p>
+                      <p className="text-xs opacity-60 mt-0.5">
+                        retire {newYear}{newAge !== null ? ` · age ${newAge}` : ''}
+                      </p>
+                    </>
+                  )
+                })() : (
+                  <>
+                    <p className="text-base font-bold tabular-nums mt-0.5">&gt;20 years</p>
+                    <p className="text-xs opacity-60 mt-0.5">contributions alone won&apos;t fix this</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {(fundingProjection.startTaxable > 0 || fundingProjection.startIra > 0 || fundingProjection.startRoth > 0 || numVal(form.annualLivingExpenses) > 0) ? (
           <Card>
             <CardHeader className="pb-2">
@@ -1105,7 +1626,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={fundingProjection.data} margin={{ top: 10, right: 20, bottom: 0, left: 20 }}>
+                <ComposedChart data={fundingProjection.data} margin={{ top: 24, right: 20, bottom: 0, left: 20 }}>
                   <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={(v: number) => fmtK(v)} tick={{ fontSize: 11 }} width={60} />
                   <Tooltip
@@ -1113,30 +1634,29 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       if (!active || !payload?.length) return null
                       const d = fundingProjection.data.find((r) => r.year === label)
                       if (!d) return null
-                      const total = d.taxable + d.ira + d.roth
+                      const portfolioTotal = d.taxable + d.ira + d.roth
+                      const isPreRet = numVal(form.retirementYear) > 0 && d.year < numVal(form.retirementYear)
                       return (
-                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md space-y-1 min-w-[190px]">
+                        <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md space-y-1 min-w-[200px]">
                           <p className="font-semibold text-sm">Year {d.year}{d.age > 0 ? ` · Age ${d.age}` : ''}</p>
                           <p className="text-sky-500">Taxable: <span className="font-medium text-foreground">{fmtCurrency(d.taxable)}</span></p>
                           <p className="text-indigo-400">IRA / 401k: <span className="font-medium text-foreground">{fmtCurrency(d.ira)}</span></p>
                           <p className="text-emerald-500">Roth IRA: <span className="font-medium text-foreground">{fmtCurrency(d.roth)}</span></p>
-                          <p className="text-muted-foreground border-t pt-1">Portfolio total: <span className="font-medium text-foreground">{fmtCurrency(total)}</span></p>
-                          {(d.ss > 0 || d.rmd > 0) && (
-                            <div className="border-t pt-1 space-y-0.5">
-                              {d.ss > 0 && <p className="text-sky-400">SS received: <span className="font-medium text-foreground">{fmtCurrency(d.ss)}</span></p>}
-                              {d.rmd > 0 && <p className="text-indigo-400">RMD: <span className="font-medium text-foreground">{fmtCurrency(d.rmd)}</span>{d.qcds > 0 && <span className="text-muted-foreground ml-1"> · QCD {fmtCurrency(d.qcds)}</span>}</p>}
-                            </div>
-                          )}
+                          <p className="text-muted-foreground border-t pt-1">Portfolio total: <span className="font-medium text-foreground">{fmtCurrency(portfolioTotal)}</span></p>
+                          <div className="border-t pt-1 space-y-0.5">
+                            <p className="font-medium text-foreground">Total income (after tax): {fmtCurrency(d.afterTaxIncome)}</p>
+                            {isPreRet && d.w2 > 0 && <p className="text-muted-foreground pl-2">W2: {fmtCurrency(d.w2)} gross</p>}
+                            {d.ss > 0 && <p className="text-muted-foreground pl-2">SS: {fmtCurrency(d.ss)} gross</p>}
+                            {d.rmd > 0 && <p className="text-muted-foreground pl-2">RMD: {fmtCurrency(d.rmd)}{d.qcds > 0 && ` · QCD ${fmtCurrency(d.qcds)}`}</p>}
+                          </div>
                           {d.rothConversion > 0 && (
                             <p className="text-emerald-400">↳ Roth converted: <span className="font-medium text-foreground">{fmtCurrency(d.rothConversion)}</span></p>
                           )}
-                          {(d.expenses > 0 || d.taxes > 0 || d.irmaa > 0) && (
-                            <div className="border-t pt-1 space-y-0.5">
-                              {d.expenses > 0 && <p className="text-orange-400">Living expenses: <span className="font-medium text-foreground">{fmtCurrency(d.expenses)}</span></p>}
-                              {d.taxes > 0 && <p className="text-rose-400">Taxes: <span className="font-medium text-foreground">{fmtCurrency(d.taxes)}</span></p>}
-                              {d.irmaa > 0 && <p className="text-rose-300">IRMAA: <span className="font-medium text-foreground">{fmtCurrency(d.irmaa)}</span></p>}
-                            </div>
-                          )}
+                          <div className="border-t pt-1 space-y-0.5">
+                            {d.expenses > 0 && <p className="text-orange-400">Living expenses: <span className="font-medium text-foreground">{fmtCurrency(d.expenses)}</span></p>}
+                            {d.taxes > 0 && <p className="text-rose-400">Taxes: <span className="font-medium text-foreground">{fmtCurrency(d.taxes)}</span></p>}
+                            {d.irmaa > 0 && <p className="text-rose-300">IRMAA: <span className="font-medium text-foreground">{fmtCurrency(d.irmaa)}</span></p>}
+                          </div>
                         </div>
                       )
                     }}
@@ -1163,6 +1683,66 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       )
                     }}
                   />
+                  {numVal(form.retirementYear) > 0 && (
+                    <ReferenceLine
+                      x={numVal(form.retirementYear)}
+                      stroke="#6366f1"
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      label={(props: { viewBox?: { x?: number; y?: number } }) => {
+                        const cx = props.viewBox?.x ?? 0
+                        const cy = (props.viewBox?.y ?? 0) - 20
+                        const text = 'Retirement'
+                        const w = text.length * 6.2 + 10
+                        return (
+                          <g>
+                            <rect x={cx - w / 2} y={cy} width={w} height={16} rx={3} fill="#6366f1" />
+                            <text x={cx} y={cy + 11.5} textAnchor="middle" fontSize={10} fontWeight={600} fill="white">{text}</text>
+                          </g>
+                        )
+                      }}
+                    />
+                  )}
+                  {numVal(form.ssStartYear) > 0 && (
+                    <ReferenceLine
+                      x={numVal(form.ssStartYear)}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      label={(props: { viewBox?: { x?: number; y?: number } }) => {
+                        const cx = props.viewBox?.x ?? 0
+                        const cy = (props.viewBox?.y ?? 0) - 20
+                        const text = isJoint ? 'Your SS' : 'SS Start'
+                        const w = text.length * 6.2 + 10
+                        return (
+                          <g>
+                            <rect x={cx - w / 2} y={cy} width={w} height={16} rx={3} fill="#f59e0b" />
+                            <text x={cx} y={cy + 11.5} textAnchor="middle" fontSize={10} fontWeight={600} fill="white">{text}</text>
+                          </g>
+                        )
+                      }}
+                    />
+                  )}
+                  {isJoint && numVal(form.spouseSsStartYear) > 0 && (
+                    <ReferenceLine
+                      x={numVal(form.spouseSsStartYear)}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 3"
+                      strokeWidth={1.5}
+                      label={(props: { viewBox?: { x?: number; y?: number } }) => {
+                        const cx = props.viewBox?.x ?? 0
+                        const cy = (props.viewBox?.y ?? 0) - 20
+                        const text = 'Spouse SS'
+                        const w = text.length * 6.2 + 10
+                        return (
+                          <g>
+                            <rect x={cx - w / 2} y={cy} width={w} height={16} rx={3} fill="#f59e0b" />
+                            <text x={cx} y={cy + 11.5} textAnchor="middle" fontSize={10} fontWeight={600} fill="white">{text}</text>
+                          </g>
+                        )
+                      }}
+                    />
+                  )}
                   <Bar stackId="s" dataKey="taxable" fill="#0ea5e9" name="Taxable" />
                   <Bar stackId="s" dataKey="ira" fill="#818cf8" name="IRA / 401k" />
                   <Bar stackId="s" dataKey="roth" fill="#22c55e" name="Roth IRA" />
@@ -1190,6 +1770,102 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                     Tax &amp; IRMAA Cost over Lifetime
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pt-4 pb-5 space-y-4">
+
+        {/* Scenario Comparison card */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle className="text-base">Roth Conversion Scenario Comparison</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Window</span>
+                <Select value={comparisonWindow} onValueChange={(v) => setComparisonWindow(v as typeof comparisonWindow)}>
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="always">Drain IRA</SelectItem>
+                    <SelectItem value="before-ss">Before SS starts</SelectItem>
+                    <SelectItem value="before-rmd">Before RMDs (age 73)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {scenarioComparison.map((sc) => {
+                const isActive = sc.tier === -1 ? !showConversions : showConversions && irmaaTargetTier === sc.tier
+                return (
+                  <button
+                    key={sc.tier}
+                    type="button"
+                    onClick={() => {
+                      if (sc.tier === -1) {
+                        setShowConversions(false)
+                      } else {
+                        setShowConversions(true)
+                        setIrmaaTargetTier(sc.tier as IrmaaTargetTier)
+                        setConversionWindow(comparisonWindow)
+                      }
+                    }}
+                    className={`rounded-lg border p-3 text-left space-y-2.5 transition-all cursor-pointer hover:border-primary/60 ${isActive ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border bg-card hover:bg-muted/30'}`}
+                  >
+                    <p className={`text-sm font-semibold flex items-center gap-1.5 ${isActive ? 'text-primary' : ''}`}>
+                      {sc.label}
+                      {isActive && <span className="text-[10px] font-normal bg-primary text-primary-foreground rounded px-1 py-0.5 leading-none">selected</span>}
+                    </p>
+                    <div className="space-y-1.5 text-xs">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Lifetime Cost</p>
+                        <p className="font-bold tabular-nums">{fmtK(sc.totalCost)}</p>
+                        <p className="text-[10px] text-muted-foreground">Tax {fmtK(sc.totalTax)} · IRMAA {fmtK(sc.totalIrmaa)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Net Savings vs Baseline</p>
+                        {sc.tier === -1 ? (
+                          <p className="font-bold text-muted-foreground">—</p>
+                        ) : (
+                          <p className={`font-bold tabular-nums ${sc.netSavings >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                            {sc.netSavings >= 0 ? '+' : ''}{fmtK(sc.netSavings)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        {sc.tier === -1 ? (
+                          <p className="font-bold invisible">—</p>
+                        ) : (
+                          <>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Break-Even</p>
+                            {sc.breakevenYear !== null ? (
+                              <p className="font-bold tabular-nums">{sc.breakevenYear}</p>
+                            ) : (
+                              <p className="font-bold text-destructive">Never</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Roth Converted</p>
+                        <p className="font-bold tabular-nums">{fmtK(sc.totalRothConverted)}</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Final IRA</p>
+                          <p className="font-bold tabular-nums text-indigo-500">{fmtK(sc.finalIra)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Final Roth</p>
+                          <p className="font-bold tabular-nums text-emerald-500">{fmtK(sc.finalRoth)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">Click a scenario to select it and update the charts below. The Window dropdown here lets you compare how the stop-year changes outcomes — clicking a scenario also applies that window to the main plan.</p>
+          </CardContent>
+        </Card>
 
         {/* Lifetime Summary card */}
         <Card>
@@ -1288,7 +1964,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             </LineChart>
           </ResponsiveContainer>
           <p className="text-xs text-muted-foreground mt-3">
-            Solid lines = optimized (with conversions). Dashed = baseline. Roth is tax-free to heirs; IRA is taxable under the 10-year inherited RMD rule.
+            Solid lines = selected plan. Dashed = baseline (no conversions). Roth is tax-free to heirs; IRA is taxable under the 10-year inherited RMD rule. Click a scenario card above to switch plans.
           </p>
         </CardContent>
       </Card>
@@ -1407,8 +2083,8 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
           </ResponsiveContainer>
           <p className="text-xs text-muted-foreground mt-3">
             {showConversions
-              ? 'Bars = optimized cost (with conversions). Grey dashed = baseline. Green line = cumulative savings — negative means conversion tax paid so far exceeds savings (not yet recovered), positive means break-even reached and you are saving money.'
-              : 'Bars = baseline scenario — no Roth conversions. Switch to "With Roth conversions" to see the optimized strategy.'}
+              ? 'Bars = selected plan cost (with conversions). Grey dashed = baseline. Green line = cumulative savings — negative means conversion tax not yet recovered, positive means break-even reached.'
+              : 'Bars = baseline scenario — no Roth conversions. Click a scenario card above or switch to "With Roth conversions" to see the optimized strategy.'}
           </p>
         </CardContent>
       </Card>

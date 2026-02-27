@@ -165,10 +165,12 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   retirementYear: int(),
   ssStartYear: int(),
   ssPaymentsPerYear: real().notNull().default(0),
+  ssMonthlyFraBenefit: real(),  // FRA monthly benefit from SSA statement (today's $)
   filingStatus: text(),
   // Spouse SS (for MFJ — DOB stored in profiles; these are the SS inputs)
   spouseSsStartYear: int(),
   spouseSsPaymentsPerYear: real(),
+  spouseSsMonthlyFraBenefit: real(),
   // Projection settings
   inflationPct: real().notNull().default(2.5),
   medicareEnrollees: int().notNull().default(1),

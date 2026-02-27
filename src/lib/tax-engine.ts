@@ -126,23 +126,27 @@ const IRMAA_CONVERSION_CEILING: Record<FilingStatus, [number, number, number]> =
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
-function calcOrdinaryTax(taxableIncome: number, filing: FilingStatus): number {
+// Tax brackets, standard deduction, and LTCG thresholds are all CPI-indexed under current law.
+// inflFactor scales them forward from their 2025 base each year of the projection.
+
+function calcOrdinaryTax(taxableIncome: number, filing: FilingStatus, inflFactor: number): number {
   const brackets = filing === 'single' ? BRACKETS_SINGLE : BRACKETS_JOINT
   let tax = 0
   let prev = 0
   for (const [ceiling, rate] of brackets) {
     if (taxableIncome <= prev) break
-    const slice = Math.min(taxableIncome, ceiling) - prev
+    const inflatedCeiling = ceiling === Infinity ? Infinity : ceiling * inflFactor
+    const slice = Math.min(taxableIncome, inflatedCeiling) - prev
     tax += slice * rate
-    prev = ceiling
+    prev = inflatedCeiling
   }
   return tax
 }
 
-function calcLtcgTax(ltcgAmount: number, taxableIncome: number, filing: FilingStatus): number {
+function calcLtcgTax(ltcgAmount: number, taxableIncome: number, filing: FilingStatus, inflFactor: number): number {
   if (ltcgAmount <= 0) return 0
-  const floor0 = LTCG_0PCT[filing]
-  const floor15 = LTCG_15PCT[filing]
+  const floor0 = LTCG_0PCT[filing] * inflFactor
+  const floor15 = LTCG_15PCT[filing] * inflFactor
   // Cap at taxableIncome — the standard deduction may reduce the taxable LTCG below the gross amount
   const effectiveLtcg = Math.min(ltcgAmount, taxableIncome)
   // Ordinary income fills brackets first; LTCG stacks on top
@@ -153,30 +157,40 @@ function calcLtcgTax(ltcgAmount: number, taxableIncome: number, filing: FilingSt
   return in15pct * 0.15 + in20pct * 0.20
 }
 
-function calcSSTaxPct(provisional: number, filing: FilingStatus): number {
+// Compute the actual taxable portion of SS using the IRS marginal formula.
+// Provisional income thresholds ($25k/$34k single, $32k/$44k joint) are NOT indexed to
+// inflation under current law — they've been frozen since 1984. Only the marginal amounts
+// above each threshold are included, not a flat fraction of all SS.
+function calcTaxableSS(ss: number, provisional: number, filing: FilingStatus): number {
   if (filing === 'single') {
     if (provisional <= 25_000) return 0
-    if (provisional <= 34_000) return 0.50
-    return 0.85
+    if (provisional <= 34_000) return Math.min(0.5 * ss, 0.5 * (provisional - 25_000))
+    return Math.min(0.85 * ss, 0.85 * (provisional - 34_000) + 4_500)
   } else {
     if (provisional <= 32_000) return 0
-    if (provisional <= 44_000) return 0.50
-    return 0.85
+    if (provisional <= 44_000) return Math.min(0.5 * ss, 0.5 * (provisional - 32_000))
+    return Math.min(0.85 * ss, 0.85 * (provisional - 44_000) + 6_000)
   }
 }
 
-// Inflate IRMAA bracket floors and premium amounts from their 2026 base values.
+// Compute the IRMAA surcharge — the income-based Medicare penalty above the base Part B premium.
+// Returns $0 when MAGI is below Tier 1 (standard premium payers pay no IRMAA surcharge).
+// The base Part B premium (~$203/mo in 2026) is a fixed cost users should include in living
+// expenses; tracking it here as "IRMAA" would show costs even on a SS-only retirement income.
 // medicareEnrollees multiplies the result — joint filers where both are on Medicare pay twice.
 function lookupIrmaa(magi: number, filing: FilingStatus, year: number, inflationPct: number, medicareEnrollees: 1 | 2): number {
   const yd = getYearData(2026)
   const brackets = filing === 'single' ? yd.irmaaSingle : yd.irmaaJoint
+  const basePremium = brackets[0].partBPremium
   const inflFactor = Math.pow(1 + inflationPct / 100, year - 2026)
   let bracket = brackets[0]
   for (const b of brackets) {
     if (magi >= b.incomeFloor * inflFactor) bracket = b
     else break
   }
-  return (bracket.partBPremium + bracket.partDSurcharge) * 12 * inflFactor * medicareEnrollees
+  if (bracket === brackets[0]) return 0  // below Tier 1 — no IRMAA surcharge
+  // IRMAA surcharge = premium above the base Part B + Part D surcharge, scaled for inflation
+  return (bracket.partBPremium - basePremium + bracket.partDSurcharge) * 12 * inflFactor * medicareEnrollees
 }
 
 // ─── Life expectancy (SSA 2021 Period Life Table, sex-specific) ───────────────
@@ -272,23 +286,28 @@ interface YearMetrics {
 function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number, medicareStartYear: number): YearMetrics {
   const { w2, ss, iraWithdrawal, interestIncome, dividendIncome, capGainsDist, stcg, ltcg, otherIncome, qcds, age, filing } = base
 
+  // Inflation factor: scales CPI-indexed thresholds (brackets, std deduction, LTCG) from 2025 base.
+  // IRMAA is already scaled inside lookupIrmaa. SS provisional thresholds are NOT indexed (frozen since 1984).
+  const inflFactor = Math.pow(1 + inflationPct / 100, year - 2025)
+
   // SS provisional income = all income (excluding SS itself) + half of SS
   // Includes Roth conversion and other ordinary income as they affect SS taxability
   const provisional = (w2 + interestIncome + dividendIncome + capGainsDist + stcg + ltcg + otherIncome + iraWithdrawal + rothConversion - qcds) + 0.5 * ss
-  const ssTaxPct = calcSSTaxPct(provisional, filing)
-  const taxableSS = ss * ssTaxPct
+  const taxableSS = calcTaxableSS(ss, provisional, filing)
 
   // MAGI: all income sources including taxable portion of SS
   const magi = w2 + interestIncome + dividendIncome + capGainsDist + stcg + ltcg + otherIncome + iraWithdrawal + taxableSS - qcds + rothConversion
 
-  const taxableIncome = Math.max(0, magi - STD_DEDUCTION[filing])
+  // Standard deduction is CPI-indexed — scale from 2025 base
+  const stdDeduction = STD_DEDUCTION[filing] * inflFactor
+  const taxableIncome = Math.max(0, magi - stdDeduction)
 
   // Preferred (LTCG) rates: qualified dividends, long-term cap gains, cap gains distributions
   // Ordinary rates: W2, interest, STCG, other income, IRA withdrawals, taxable SS, Roth conversion
   const ltcgAmount = dividendIncome + ltcg + capGainsDist
   const ordinaryTaxable = Math.max(0, taxableIncome - ltcgAmount)
-  const federalTax = calcOrdinaryTax(ordinaryTaxable, filing)
-  const ltcgTax = calcLtcgTax(ltcgAmount, taxableIncome, filing)
+  const federalTax = calcOrdinaryTax(ordinaryTaxable, filing, inflFactor)
+  const ltcgTax = calcLtcgTax(ltcgAmount, taxableIncome, filing, inflFactor)
   // State tax: applied to full MAGI (many states use own deductions, but MAGI is a reasonable proxy)
   const stateTax = magi * stateTaxRate
   const totalTax = federalTax + ltcgTax + stateTax
@@ -361,7 +380,7 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     const yearMedicareEnrollees: 1 | 2 = (isAfterFirstDeath && medicareEnrollees === 2) ? 1 : medicareEnrollees
 
     // Pre-retirement contributions (added before growth so they compound the full year)
-    if (year <= retirementYear) {
+    if (year < retirementYear) {
       iraBalance += annualDeferredContrib + annualEmployerMatch + spouseAnnualDeferredContrib + spouseAnnualEmployerMatch
       rothBalance += annualRothContrib + spouseAnnualRothContrib
     }
@@ -389,8 +408,8 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     }
 
     // Pre-tax deferrals reduce taxable W2; Roth contributions and employer match do not
-    const deferredReduction = year <= retirementYear ? annualDeferredContrib + spouseAnnualDeferredContrib : 0
-    const w2 = year <= retirementYear ? Math.max(0, w2Income - deferredReduction) : 0
+    const deferredReduction = year < retirementYear ? annualDeferredContrib + spouseAnnualDeferredContrib : 0
+    const w2 = year < retirementYear ? Math.max(0, w2Income - deferredReduction) : 0
 
     // SS: compute both streams with COLA, then combine or apply survivor benefit
     const primarySS = year >= ssStartYear
