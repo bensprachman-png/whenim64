@@ -222,6 +222,12 @@ async function buildPlanningContext(
       stateTaxRate,
       planToAge:             ts.planToAge ?? 0,
       spousePlanToAge:       ts.spousePlanToAge ?? 0,
+      annualDeferredContrib: ts.annualDeferredContrib ?? 0,
+      annualRothContrib:     ts.annualRothContrib ?? 0,
+      annualEmployerMatch:   (ts.w2Income ?? 0) * (ts.employerMatchPct ?? 0) / 100,
+      spouseAnnualDeferredContrib: ts.spouseAnnualDeferredContrib ?? 0,
+      spouseAnnualRothContrib:     ts.spouseAnnualRothContrib ?? 0,
+      spouseAnnualEmployerMatch:   (ts.w2Income ?? 0) * (ts.spouseEmployerMatchPct ?? 0) / 100,
     })
 
     // Compute cumulative savings trajectory and break-even

@@ -39,6 +39,13 @@ export interface TaxInputs {
   stateTaxRate: number      // effective state income tax rate (0–1); 0 = no state tax
   planToAge: number         // override primary life expectancy (0 = use SSA)
   spousePlanToAge: number   // override spouse life expectancy (0 = use SSA)
+  // Pre-retirement contributions — applied each year through retirementYear, then stop
+  annualDeferredContrib: number    // primary pre-tax (traditional 401k/IRA) $/year
+  annualRothContrib: number        // primary Roth (Roth 401k/Roth IRA) $/year
+  annualEmployerMatch: number      // primary employer match $/year (pre-tax)
+  spouseAnnualDeferredContrib: number
+  spouseAnnualRothContrib: number
+  spouseAnnualEmployerMatch: number
 }
 
 export interface ScenarioRow {
@@ -318,6 +325,8 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     filing, birthYear, startYear, projectionYears, irmaaTargetTier, inflationPct, conversionStopYear, medicareEnrollees,
     sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex, stateTaxRate,
     planToAge, spousePlanToAge,
+    annualDeferredContrib, annualRothContrib, annualEmployerMatch,
+    spouseAnnualDeferredContrib, spouseAnnualRothContrib, spouseAnnualEmployerMatch,
   } = inputs
 
   let iraBalance = inputs.iraBalance
@@ -345,6 +354,12 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     const yearFiling: FilingStatus = isAfterFirstDeath ? 'single' : filing
     const yearMedicareEnrollees: 1 | 2 = (isAfterFirstDeath && medicareEnrollees === 2) ? 1 : medicareEnrollees
 
+    // Pre-retirement contributions (added before growth so they compound the full year)
+    if (year <= retirementYear) {
+      iraBalance += annualDeferredContrib + annualEmployerMatch + spouseAnnualDeferredContrib + spouseAnnualEmployerMatch
+      rothBalance += annualRothContrib + spouseAnnualRothContrib
+    }
+
     // Grow IRA
     iraBalance *= (1 + portfolioGrowthPct / 100)
 
@@ -367,7 +382,9 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
       iraBalance = Math.max(0, iraBalance - taxableIraWithdrawal)
     }
 
-    const w2 = year <= retirementYear ? w2Income : 0
+    // Pre-tax deferrals reduce taxable W2; Roth contributions and employer match do not
+    const deferredReduction = year <= retirementYear ? annualDeferredContrib + spouseAnnualDeferredContrib : 0
+    const w2 = year <= retirementYear ? Math.max(0, w2Income - deferredReduction) : 0
 
     // SS: compute both streams with COLA, then combine or apply survivor benefit
     const primarySS = year >= ssStartYear

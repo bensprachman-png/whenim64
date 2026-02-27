@@ -60,6 +60,12 @@ const DEMO_SCENARIO = {
   showConversions: true,
   planToAge: null,
   spousePlanToAge: null,
+  annualDeferredContrib: 0,
+  annualRothContrib: 0,
+  employerMatchPct: 0,
+  spouseAnnualDeferredContrib: 0,
+  spouseAnnualRothContrib: 0,
+  spouseEmployerMatchPct: 0,
   filingStatus: DEMO_FILING_STATUS,
   updatedAt: new Date(),
 }

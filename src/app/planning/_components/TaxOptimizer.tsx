@@ -101,6 +101,12 @@ interface FormState {
   spouseBirthYearOverride: string  // local-only fallback when profile lacks spouse DOB
   planToAge: string          // override SSA life expectancy for primary ('' = SSA default)
   spousePlanToAge: string    // override SSA life expectancy for spouse
+  annualDeferredContrib: string
+  annualRothContrib: string
+  employerMatchPct: string
+  spouseAnnualDeferredContrib: string
+  spouseAnnualRothContrib: string
+  spouseEmployerMatchPct: string
 }
 
 function initForm(
@@ -136,6 +142,12 @@ function initForm(
     spouseBirthYearOverride: '',
     planToAge: scenario?.planToAge ? String(scenario.planToAge) : '',
     spousePlanToAge: scenario?.spousePlanToAge ? String(scenario.spousePlanToAge) : '',
+    annualDeferredContrib: nz(scenario?.annualDeferredContrib),
+    annualRothContrib: nz(scenario?.annualRothContrib),
+    employerMatchPct: nz(scenario?.employerMatchPct),
+    spouseAnnualDeferredContrib: nz(scenario?.spouseAnnualDeferredContrib),
+    spouseAnnualRothContrib: nz(scenario?.spouseAnnualRothContrib),
+    spouseEmployerMatchPct: nz(scenario?.spouseEmployerMatchPct),
   }
 }
 
@@ -279,6 +291,12 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       stateTaxRate: stateInfo?.rate ?? 0,
       planToAge: numVal(form.planToAge),
       spousePlanToAge: numVal(form.spousePlanToAge),
+      annualDeferredContrib: numVal(form.annualDeferredContrib),
+      annualRothContrib: numVal(form.annualRothContrib),
+      annualEmployerMatch: numVal(form.w2Income) * numVal(form.employerMatchPct) / 100,
+      spouseAnnualDeferredContrib: numVal(form.spouseAnnualDeferredContrib),
+      spouseAnnualRothContrib: numVal(form.spouseAnnualRothContrib),
+      spouseAnnualEmployerMatch: numVal(form.w2Income) * numVal(form.spouseEmployerMatchPct) / 100,
     })
     return { ...result, projectionYears }
   }, [form, birthYear, startYear, irmaaTargetTier, conversionWindow, taxFiling, sex, spouseBirthYear, spouseSex, brokerageIraTotal, brokerageRothTotal, stateInfo, effectiveSpouseBirthYear])
@@ -471,6 +489,12 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
             showConversions,
             planToAge: numVal(form.planToAge) || null,
             spousePlanToAge: numVal(form.spousePlanToAge) || null,
+            annualDeferredContrib: numVal(form.annualDeferredContrib),
+            annualRothContrib: numVal(form.annualRothContrib),
+            employerMatchPct: numVal(form.employerMatchPct),
+            spouseAnnualDeferredContrib: numVal(form.spouseAnnualDeferredContrib),
+            spouseAnnualRothContrib: numVal(form.spouseAnnualRothContrib),
+            spouseEmployerMatchPct: numVal(form.spouseEmployerMatchPct),
           }),
         })
         if (!res.ok) {
@@ -829,6 +853,54 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       </div>
                     </div>
 
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* ── 5: Pre-Retirement Contributions ── */}
+                <AccordionItem value="contributions" className="rounded-lg border overflow-hidden">
+                  <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
+                    Pre-Retirement Contributions
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pt-4 pb-5 space-y-5">
+                    <p className="text-xs text-muted-foreground">
+                      Annual contributions applied each year through your retirement year, then stopped. Tax-deferred contributions reduce your taxable W2 income. Employer match is added pre-tax to your IRA/401k balance.
+                    </p>
+
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Your Contributions</p>
+                      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                        <div>
+                          <NumberInput id="annualDeferredContrib" label="Tax-Deferred / Year (401k + IRA)" value={form.annualDeferredContrib} onChange={set('annualDeferredContrib')} step="500" />
+                          <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k</p>
+                        </div>
+                        <div>
+                          <NumberInput id="annualRothContrib" label="Roth / Year (Roth 401k + Roth IRA)" value={form.annualRothContrib} onChange={set('annualRothContrib')} step="500" />
+                          <p className="text-xs text-muted-foreground mt-1">2026 IRA limit: $7,000 ($8,000 if 50+)</p>
+                        </div>
+                        <div>
+                          <NumberInput id="employerMatchPct" label="Employer Match (% of W2)" value={form.employerMatchPct} onChange={set('employerMatchPct')} step="0.5" prefix="" suffix="%" />
+                          <p className="text-xs text-muted-foreground mt-1">e.g. 4 if company matches 100% up to 4% of salary</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isJoint && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Spouse Contributions</p>
+                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                          <div>
+                            <NumberInput id="spouseAnnualDeferredContrib" label="Spouse Tax-Deferred / Year" value={form.spouseAnnualDeferredContrib} onChange={set('spouseAnnualDeferredContrib')} step="500" />
+                            <p className="text-xs text-muted-foreground mt-1">2026 limit: $23,500 ($31,000 if 50+) for 401k</p>
+                          </div>
+                          <div>
+                            <NumberInput id="spouseAnnualRothContrib" label="Spouse Roth / Year" value={form.spouseAnnualRothContrib} onChange={set('spouseAnnualRothContrib')} step="500" />
+                          </div>
+                          <div>
+                            <NumberInput id="spouseEmployerMatchPct" label="Spouse Employer Match (% of W2)" value={form.spouseEmployerMatchPct} onChange={set('spouseEmployerMatchPct')} step="0.5" prefix="" suffix="%" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </AccordionContent>
                 </AccordionItem>
 

@@ -250,6 +250,12 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       stateTaxRate: stateInfo?.rate ?? 0,
       planToAge: numVal(form.planToAge),
       spousePlanToAge: numVal(form.spousePlanToAge),
+      annualDeferredContrib: 0,
+      annualRothContrib: 0,
+      annualEmployerMatch: 0,
+      spouseAnnualDeferredContrib: 0,
+      spouseAnnualRothContrib: 0,
+      spouseAnnualEmployerMatch: 0,
     })
     return { ...result, projectionYears }
   }, [form, birthYear, startYear, irmaaTargetTier, conversionWindow, taxFiling, sex, spouseBirthYear, spouseSex, brokerageIraTotal, brokerageRothTotal, stateInfo, effectiveSpouseBirthYear])

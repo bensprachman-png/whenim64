@@ -177,5 +177,11 @@ export const taxScenarios = sqliteTable('taxScenarios', {
   showConversions: int({ mode: 'boolean' }).notNull().default(true),
   planToAge: int(),
   spousePlanToAge: int(),
+  annualDeferredContrib: real().notNull().default(0),
+  annualRothContrib: real().notNull().default(0),
+  employerMatchPct: real().notNull().default(0),
+  spouseAnnualDeferredContrib: real().notNull().default(0),
+  spouseAnnualRothContrib: real().notNull().default(0),
+  spouseEmployerMatchPct: real().notNull().default(0),
   updatedAt: int({ mode: 'timestamp' }).notNull(),
 })

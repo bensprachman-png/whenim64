@@ -212,6 +212,12 @@ export default async function DashboardPage() {
       stateTaxRate: stateInfo?.rate ?? 0,
       planToAge,
       spousePlanToAge,
+      annualDeferredContrib: scenario.annualDeferredContrib ?? 0,
+      annualRothContrib: scenario.annualRothContrib ?? 0,
+      annualEmployerMatch: (scenario.w2Income ?? 0) * (scenario.employerMatchPct ?? 0) / 100,
+      spouseAnnualDeferredContrib: scenario.spouseAnnualDeferredContrib ?? 0,
+      spouseAnnualRothContrib: scenario.spouseAnnualRothContrib ?? 0,
+      spouseAnnualEmployerMatch: (scenario.w2Income ?? 0) * (scenario.spouseEmployerMatchPct ?? 0) / 100,
     }
 
     const { optimizedRows } = projectTaxes(taxInputs)

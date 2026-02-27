@@ -29,6 +29,8 @@ export async function PUT(req: NextRequest) {
     ssPaymentsPerYear, spouseSsStartYear, spouseSsPaymentsPerYear,
     inflationPct, medicareEnrollees, irmaaTargetTier, conversionWindow, showConversions,
     planToAge, spousePlanToAge,
+    annualDeferredContrib, annualRothContrib, employerMatchPct,
+    spouseAnnualDeferredContrib, spouseAnnualRothContrib, spouseEmployerMatchPct,
   } = body
 
   const now = new Date()
@@ -61,6 +63,12 @@ export async function PUT(req: NextRequest) {
     showConversions: showConversions ?? true,
     planToAge: planToAge ?? null,
     spousePlanToAge: spousePlanToAge ?? null,
+    annualDeferredContrib: annualDeferredContrib ?? 0,
+    annualRothContrib: annualRothContrib ?? 0,
+    employerMatchPct: employerMatchPct ?? 0,
+    spouseAnnualDeferredContrib: spouseAnnualDeferredContrib ?? 0,
+    spouseAnnualRothContrib: spouseAnnualRothContrib ?? 0,
+    spouseEmployerMatchPct: spouseEmployerMatchPct ?? 0,
     updatedAt: now,
   }
 
