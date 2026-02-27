@@ -57,9 +57,6 @@ export default function AccountPage() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPaid, setIsPaid] = useState(false)
-  const [paidToggling, setPaidToggling] = useState(false)
-  const [paidToggleError, setPaidToggleError] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string>('user')
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -96,7 +93,6 @@ export default function AccountPage() {
     if (profile) {
       setHasPassword(profile.hasPassword ?? false)
       setIsPaid(profile.isPaid ?? false)
-      setUserRole(profile.role ?? 'user')
       const method = profile.twoFactorMethod ?? null
       setTwoFactorMethod(method)
       if (method) setSelectedMethod(method as 'email' | 'totp')
@@ -318,35 +314,6 @@ export default function AccountPage() {
   const twoFAEnabled = session?.user?.twoFactorEnabled
   const filingStatusValue = form.watch('filingStatus')
 
-  const isAdmin = userRole === 'admin' || userRole === 'superuser'
-
-  async function handlePaidToggle() {
-    setPaidToggleError(null)
-    if (!profileId) {
-      setPaidToggleError('Save your profile first before using this toggle.')
-      return
-    }
-    setPaidToggling(true)
-    try {
-      const res = await fetch(`/api/users/${profileId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPaid: !isPaid }),
-      })
-      if (res.ok) {
-        setIsPaid((p) => !p)
-        router.refresh()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setPaidToggleError(`Update failed (${res.status}): ${(data as { error?: string }).error ?? 'Unknown error'}`)
-      }
-    } catch {
-      setPaidToggleError('Network error — check the console.')
-    } finally {
-      setPaidToggling(false)
-    }
-  }
-
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
 
@@ -386,27 +353,6 @@ export default function AccountPage() {
               Upgrade to Premium
             </button>
             <p className="text-xs text-muted-foreground mt-2">Subscription billing coming soon.</p>
-          </CardContent>
-        )}
-        {isAdmin && (
-          <CardContent className={isPaid ? undefined : 'pt-0'}>
-            <div className="rounded-md border border-dashed border-muted p-3 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dev / Admin only</p>
-              <div className="flex items-center justify-between">
-                <label htmlFor="paid-toggle" className="text-sm cursor-pointer">
-                  Simulate paid user
-                </label>
-                <Switch
-                  id="paid-toggle"
-                  checked={isPaid}
-                  disabled={paidToggling}
-                  onCheckedChange={handlePaidToggle}
-                />
-              </div>
-              {paidToggleError && (
-                <p className="text-xs text-destructive">{paidToggleError}</p>
-              )}
-            </div>
           </CardContent>
         )}
       </Card>
