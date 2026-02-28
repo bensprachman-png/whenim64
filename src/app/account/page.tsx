@@ -34,7 +34,7 @@ export default function AccountPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null)
   const [prices, setPrices] = useState<{ monthly: { formatted: string }; yearly: { formatted: string } } | null>(null)
-  const [upgradeLoading, setUpgradeLoading] = useState<'monthly' | 'yearly' | 'portal' | null>(null)
+  const [upgradeLoading, setUpgradeLoading] = useState<'monthly' | 'yearly' | 'portal' | 'upgrade' | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const [checkoutSuccess, setCheckoutSuccess] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -191,6 +191,24 @@ export default function AccountPage() {
         window.location.href = data.url
       } else {
         setUpgradeError(data.error ?? 'Could not start checkout. Please try again.')
+      }
+    } catch {
+      setUpgradeError('Could not connect to payment provider. Please try again.')
+    } finally {
+      setUpgradeLoading(null)
+    }
+  }
+
+  async function handleUpgradeToAnnual() {
+    setUpgradeLoading('upgrade')
+    setUpgradeError(null)
+    try {
+      const res = await fetch('/api/stripe/upgrade', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        await fetchProfile()
+      } else {
+        setUpgradeError(data.error ?? 'Could not switch plan. Please try again.')
       }
     } catch {
       setUpgradeError('Could not connect to payment provider. Please try again.')
@@ -458,14 +476,28 @@ export default function AccountPage() {
                   Status: <span className="font-medium text-amber-600 dark:text-amber-400 capitalize">{subscriptionStatus.replace('_', ' ')}</span>
                 </p>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleManageSubscription}
-                disabled={upgradeLoading === 'portal'}
-              >
-                {upgradeLoading === 'portal' ? 'Opening…' : 'Manage Subscription'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {subscriptionPlan === 'monthly' && (
+                  <Button
+                    size="sm"
+                    onClick={handleUpgradeToAnnual}
+                    disabled={upgradeLoading !== null}
+                  >
+                    {upgradeLoading === 'upgrade' ? 'Switching…' : 'Switch to Annual'}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManageSubscription}
+                  disabled={upgradeLoading !== null}
+                >
+                  {upgradeLoading === 'portal' ? 'Opening…' : 'Manage Subscription'}
+                </Button>
+              </div>
+              {upgradeError && (
+                <p className="text-sm text-destructive">{upgradeError}</p>
+              )}
             </div>
           ) : (
             /* ── Free: show checkout-processing banner or pricing cards ── */

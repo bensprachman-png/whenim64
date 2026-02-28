@@ -27,6 +27,12 @@ export async function POST(request: Request) {
 
   // Get or create Stripe customer
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1)
+
+  // Block checkout if already on an active subscription
+  if (profile?.isPaid) {
+    return NextResponse.json({ error: 'You already have an active subscription.' }, { status: 400 })
+  }
+
   let customerId = profile?.stripeCustomerId ?? null
 
   if (!customerId) {
