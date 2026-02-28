@@ -156,7 +156,7 @@ export default async function DemoPage({
           <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-6">
             <p>
-              Strategic tax planning — especially around Required Minimum Distributions and Roth conversions — can save you tens of thousands of dollars over a lifetime. The window between retirement and age 73 is your best opportunity to act.
+              Strategic tax planning — especially around Required Minimum Distributions and Roth conversions — can save you tens of thousands of dollars over a lifetime. The window between retirement and your RMD age is your best opportunity to act.
             </p>
 
             <div className="rounded-lg border bg-card px-4 py-3 space-y-2">
@@ -166,7 +166,7 @@ export default async function DemoPage({
               </p>
               <p>
                 <strong className="text-foreground">Still working? Prioritize Roth contributions.</strong>{' '}
-                Roth accounts are never subject to RMDs during your lifetime. Every dollar converted or contributed to a Roth now is a dollar that compounds tax-free and will never force a taxable withdrawal at 73.
+                Roth accounts are never subject to RMDs during your lifetime. Every dollar converted or contributed to a Roth now is a dollar that compounds tax-free and will never force a taxable RMD withdrawal.
               </p>
             </div>
 
@@ -195,7 +195,7 @@ export default async function DemoPage({
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
                   <p>
-                    The IRS requires withdrawals from tax-deferred accounts (traditional 401k, 403b, IRA) starting at age <strong className="text-foreground">73</strong> under the SECURE 2.0 Act.
+                    The IRS requires withdrawals from tax-deferred accounts (traditional 401k, 403b, IRA) starting at age <strong className="text-foreground">73 or 75</strong> under the SECURE 2.0 Act (73 for born 1951–1959; 75 for born 1960 or later).
                   </p>
                   <p>
                     <strong className="text-foreground">Amount:</strong> Prior year-end balance ÷ IRS life expectancy factor (Publication 590-B). The factor decreases each year, so the required percentage rises.
@@ -212,7 +212,7 @@ export default async function DemoPage({
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
                   <p>
-                    The years between retirement and age 73 are often a <strong className="text-foreground">&ldquo;tax valley&rdquo;</strong> — income is lower, but RMDs haven&apos;t started. Converting traditional IRA/401k funds to Roth during this window is one of the most powerful strategies available.
+                    The years between retirement and your RMD age are often a <strong className="text-foreground">&ldquo;tax valley&rdquo;</strong> — income is lower, but RMDs haven&apos;t started. Converting traditional IRA/401k funds to Roth during this window is one of the most powerful strategies available.
                   </p>
                   <p>
                     <strong className="text-foreground">Benefits:</strong> Reduces future RMD balances, Roth grows tax-free, no RMDs on Roth IRAs, and tax-free inheritance for heirs.

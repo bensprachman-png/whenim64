@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { resolveYear, getYearData } from '@/lib/retirement-data'
 import { computeProjectionYears } from '@/lib/tax-engine'
+import { getRmdAge } from '@/lib/milestones'
 import { getStateInfo } from '@/lib/state-tax'
 import type { Metadata } from 'next'
 import TaxOptimizer from './_components/TaxOptimizer'
@@ -43,9 +44,11 @@ export default async function PlanningPage({
 
   let rmdYear: number | null = null
   let birthYear: number | null = null
+  let rmdAge = 73
   if (dob) {
     birthYear = new Date(dob + 'T00:00:00').getFullYear()
-    rmdYear = birthYear + 73
+    rmdAge = getRmdAge(birthYear)
+    rmdYear = birthYear + rmdAge
   }
 
   const filingStatus = user?.filingStatus ?? 'single'
@@ -148,7 +151,7 @@ export default async function PlanningPage({
           <AccordionContent className="pb-0">
           <div className="px-5 py-4 text-sm text-muted-foreground space-y-6">
             <p>
-              Strategic tax planning — especially around Required Minimum Distributions and Roth conversions — can save you tens of thousands of dollars over a lifetime. The window between retirement and age 73 is your best opportunity to act.
+              Strategic tax planning — especially around Required Minimum Distributions and Roth conversions — can save you tens of thousands of dollars over a lifetime. The window between retirement and age {rmdAge} is your best opportunity to act.
             </p>
 
             {/* IRA contribution note */}
@@ -159,7 +162,7 @@ export default async function PlanningPage({
               </p>
               <p>
                 <strong className="text-foreground">Still working? Prioritize Roth contributions.</strong>{' '}
-                Roth accounts are never subject to RMDs during your lifetime. Every dollar converted or contributed to a Roth now is a dollar that compounds tax-free and will never force a taxable withdrawal at 73.
+                Roth accounts are never subject to RMDs during your lifetime. Every dollar converted or contributed to a Roth now is a dollar that compounds tax-free and will never force a taxable withdrawal at {rmdAge}.
               </p>
             </div>
 
@@ -193,7 +196,7 @@ export default async function PlanningPage({
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
                   <p>
-                    The IRS requires withdrawals from tax-deferred accounts (traditional 401k, 403b, IRA) starting at age <strong className="text-foreground">73</strong> under the SECURE 2.0 Act.
+                    The IRS requires withdrawals from tax-deferred accounts (traditional 401k, 403b, IRA) starting at age <strong className="text-foreground">{rmdAge}</strong> under the SECURE 2.0 Act (age 73 for born 1951–1959; age 75 for born 1960 or later).
                   </p>
                   <p>
                     <strong className="text-foreground">Amount:</strong> Prior year-end balance ÷ IRS life expectancy factor (Publication 590-B). The factor decreases each year, so the required percentage rises.
@@ -210,7 +213,7 @@ export default async function PlanningPage({
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-2">
                   <p>
-                    The years between retirement and age 73 are often a <strong className="text-foreground">&ldquo;tax valley&rdquo;</strong> — income is lower, but RMDs haven&apos;t started. Converting traditional IRA/401k funds to Roth during this window is one of the most powerful strategies available.
+                    The years between retirement and age {rmdAge} are often a <strong className="text-foreground">&ldquo;tax valley&rdquo;</strong> — income is lower, but RMDs haven&apos;t started. Converting traditional IRA/401k funds to Roth during this window is one of the most powerful strategies available.
                   </p>
                   <p>
                     <strong className="text-foreground">Benefits:</strong> Reduces future RMD balances, Roth grows tax-free, no RMDs on Roth IRAs, and tax-free inheritance for heirs.

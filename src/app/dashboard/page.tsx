@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
 }
 import MilestoneTimeline from '@/components/milestone-timeline'
-import { getFullRetirementAge, fraToString } from '@/lib/milestones'
+import { getFullRetirementAge, fraToString, getRmdAge } from '@/lib/milestones'
 import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
 
@@ -87,7 +87,7 @@ function nextBusinessDay(d: Date): Date {
 const conversionWindowLabels: Record<string, string> = {
   always: 'Drain IRA (full projection)',
   'before-ss': 'Before SS starts',
-  'before-rmd': 'Before RMDs (age 73)',
+  'before-rmd': 'Before RMDs',
 }
 
 const irmaaLabels = ['Conservative — no surcharge', 'Moderate — Tier 1 IRMAA', 'Aggressive — Tier 2 IRMAA']
@@ -135,7 +135,8 @@ export default async function DashboardPage() {
   const birthYear = dob ? new Date(dob + 'T00:00:00').getFullYear() : null
   const currentYear = new Date().getFullYear()
   const currentAge = birthYear ? currentYear - birthYear : null
-  const rmdYear = birthYear ? birthYear + 73 : null
+  const rmdAge = birthYear ? getRmdAge(birthYear) : 73
+  const rmdYear = birthYear ? birthYear + rmdAge : null
   const medicareYear = birthYear ? birthYear + 65 : null
   const fra = birthYear ? getFullRetirementAge(birthYear) : null
   const fraAge = fra ? fraToString(fra) : '67'
@@ -177,7 +178,7 @@ export default async function DashboardPage() {
     const convWindow = scenario.conversionWindow ?? 'always'
     const conversionStopYear =
       convWindow === 'before-ss' ? (scenario.ssStartYear ?? 9999)
-      : convWindow === 'before-rmd' ? (birthYear + 73)
+      : convWindow === 'before-rmd' ? (birthYear + rmdAge)
       : 9999
 
     const taxInputs: TaxInputs = {
@@ -266,7 +267,7 @@ export default async function DashboardPage() {
         {currentAge && (
           <p className="text-muted-foreground mt-1">
             Age {currentAge} · {currentYear}
-            {rmdYear && currentAge < 73 && (
+            {rmdYear && currentAge < rmdAge && (
               <span> · RMD begins in {rmdYear} ({rmdYear - currentYear} years)</span>
             )}
           </p>
@@ -418,7 +419,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              RMDs begin at <strong className="text-foreground">age 73</strong> from traditional 401k and IRA accounts.
+              RMDs begin at <strong className="text-foreground">age {rmdAge}</strong> from traditional 401k and IRA accounts.
               The amount is your prior year-end balance divided by an IRS life expectancy factor — rising each year.
               Failure to take the full RMD triggers a <strong className="text-foreground">25% excise tax</strong> on the shortfall.
               Qualified Charitable Distributions (QCDs) from age 70½ count toward RMDs tax-free.
@@ -433,7 +434,7 @@ export default async function DashboardPage() {
                     <li><span className="text-foreground font-medium">Roth IRA balance:</span> {fmtK(scenario.rothBalance)}</li>
                   )}
                   {rmdYear && (
-                    <li><span className="text-foreground font-medium">RMD begins:</span> {rmdYear}{currentAge && currentAge < 73 ? ` (${rmdYear - currentYear} yrs away)` : ''}</li>
+                    <li><span className="text-foreground font-medium">RMD begins:</span> {rmdYear}{currentAge && currentAge < rmdAge ? ` (${rmdYear - currentYear} yrs away)` : ''}</li>
                   )}
                   {(scenario.qcds ?? 0) > 0 && (
                     <li><span className="text-foreground font-medium">QCD plan:</span> {scenario.qcds}% of RMD donated to charity</li>

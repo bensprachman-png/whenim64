@@ -50,7 +50,7 @@ const FEATURES = [
   {
     icon: PiggyBank,
     title: 'RMD Planning',
-    body: 'Required Minimum Distributions begin at 73 and rise every year. Model the impact on your tax bracket and see how Roth conversions reduce future RMD burdens.',
+    body: 'Required Minimum Distributions begin at 73 or 75 (depending on your birth year) and rise every year. Model the impact on your tax bracket and see how Roth conversions reduce future RMD burdens.',
   },
   {
     icon: Briefcase,

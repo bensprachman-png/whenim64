@@ -13,6 +13,15 @@ export interface Fra {
   months: number
 }
 
+/**
+ * SECURE 2.0 Act RMD start age by birth year.
+ * Born 1951–1959 → 73  |  Born 1960+ → 75
+ */
+export function getRmdAge(birthYear: number): number {
+  if (birthYear >= 1960) return 75
+  return 73 // born 1951–1959 (anyone born ≤1950 is already past RMD age)
+}
+
 export function getFullRetirementAge(birthYear: number): Fra {
   if (birthYear <= 1937) return { years: 65, months: 0 }
   if (birthYear === 1938) return { years: 65, months: 2 }
@@ -39,6 +48,7 @@ export function calculateMilestones(dateOfBirth?: string | null): Milestone[] {
   const getYear = (age: number) => (birthYear != null ? birthYear + age : undefined)
 
   const fra = birthYear != null ? getFullRetirementAge(birthYear) : { years: 67, months: 0 }
+  const rmdAge = birthYear != null ? getRmdAge(birthYear) : 73
 
   return [
     {
@@ -73,8 +83,8 @@ export function calculateMilestones(dateOfBirth?: string | null): Milestone[] {
       id: 'rmd',
       label: 'RMD Begins',
       sublabel: '401k / IRA / QCD',
-      age: 73,
-      year: getYear(73),
+      age: rmdAge,
+      year: getYear(rmdAge),
     },
   ]
 }

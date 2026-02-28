@@ -15,7 +15,7 @@ const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning ass
 
 - Medicare: Parts A, B, C (Advantage), D; enrollment windows; Medigap supplements (Plans A–N); state-specific plans (MA, MN, WI); late-enrollment penalties; IEP, SEP, GEP
 - Social Security: claiming ages (62–70); Full Retirement Age by birth year; delayed credits (8%/yr); spousal/survivor/divorce benefits; earnings test; taxation of benefits
-- RMDs: Required Minimum Distributions from 401(k)/IRA starting at age 73; calculation; QCDs; penalties for missing
+- RMDs: Required Minimum Distributions from 401(k)/IRA; SECURE 2.0 start age is 73 (born 1951–1959) or 75 (born 1960+); calculation; QCDs; penalties for missing
 - Tax planning: IRMAA Medicare surcharges; taxation of SS benefits (0/50/85%); Roth conversions; bracket management; capital gains in retirement
 - General retirement: 4% rule; sequence-of-returns risk; healthcare costs; long-term care; inflation
 - App usage: explaining what the Planning, Dashboard, Medicare, Social Security, and Portfolio pages show; interpreting projection results, charts, and summary cards
@@ -145,7 +145,7 @@ async function buildPlanningContext(
 
   const windowDesc =
     ts.conversionWindow === 'before-ss'  ? 'stop when SS begins' :
-    ts.conversionWindow === 'before-rmd' ? 'stop when RMDs begin (age 73)' :
+    ts.conversionWindow === 'before-rmd' ? 'stop when RMDs begin' :
     'convert indefinitely'
   const irmaaDesc =
     (ts.irmaaTargetTier ?? 0) === 0 ? 'conservative — stay in base IRMAA tier' :

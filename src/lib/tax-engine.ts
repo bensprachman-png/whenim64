@@ -1,4 +1,5 @@
 import { getYearData } from './retirement-data'
+import { getRmdAge } from './milestones'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -104,12 +105,14 @@ const LTCG_15PCT: Record<FilingStatus, number> = { single: 533_400, joint: 600_0
 const QCD_ANNUAL_LIMIT_2025 = 108_000
 
 // IRS Uniform Lifetime Table (age → distribution period)
+// Covers all possible RMD start ages under SECURE 2.0 (73 for born 1951–1959; 75 for born 1960+)
 const RMD_TABLE: Record<number, number> = {
   73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9,
   78: 22.0, 79: 21.1, 80: 20.2, 81: 19.4, 82: 18.5,
   83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
   88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8,
-  93: 10.1, 94: 9.5,
+  93: 10.1, 94: 9.5, 95: 8.9, 96: 8.4, 97: 7.8,
+  98: 7.3, 99: 6.8, 100: 6.4,
 }
 
 function rmdFactor(age: number): number {
@@ -392,7 +395,7 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     let rmd = 0
     let effectiveQcds = 0
     let taxableIraWithdrawal = 0
-    if (age >= 73) {
+    if (age >= getRmdAge(birthYear)) {
       rmd = iraBalance / rmdFactor(age)
       // QCDs: % of RMD, capped at inflation-indexed IRS annual limit and available balance
       const qcdLimit = QCD_ANNUAL_LIMIT_2025 * Math.pow(1 + inflationPct / 100, year - 2025)
