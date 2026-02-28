@@ -44,11 +44,18 @@ export async function POST() {
     return NextResponse.json({ error: 'Could not find subscription item.' }, { status: 500 })
   }
 
-  // Update the subscription to the yearly price — Stripe prorates automatically
-  const updated = await stripe.subscriptions.update(profile.stripeSubscriptionId, {
+  // Update the subscription to the yearly price.
+  // always_invoice creates and immediately charges an invoice for the
+  // prorated difference (annual price minus unused monthly credit).
+  await stripe.subscriptions.update(profile.stripeSubscriptionId, {
     items: [{ id: itemId, price: yearlyPriceId }],
     metadata: { userId: session.user.id, plan: 'yearly' },
-    proration_behavior: 'create_prorations',
+    proration_behavior: 'always_invoice',
+  })
+
+  // Re-fetch with expanded items so getPeriodEnd returns the correct new date
+  const updated = await stripe.subscriptions.retrieve(profile.stripeSubscriptionId, {
+    expand: ['items.data'],
   })
 
   await db.update(profiles).set({
