@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { z } from 'zod'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession, authClient } from '@/lib/auth-client'
@@ -17,35 +16,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 
-const FILING_STATUSES = [
-  { value: 'single', label: 'Single' },
-  { value: 'married_jointly', label: 'Married Filing Jointly' },
-  { value: 'married_separately', label: 'Married Filing Separately' },
-  { value: 'head_of_household', label: 'Head of Household' },
-  { value: 'qualifying_surviving_spouse', label: 'Qualifying Surviving Spouse' },
-]
-
-const formSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Enter a valid email address'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'),
-  zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid US zip code'),
-  filingStatus: z.string().min(1, 'Please select a filing status'),
-  sex: z.string().min(1, 'Please select a biological sex'),
-  spouseDateOfBirth: z.string().optional(),
-  spouseSex: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.filingStatus === 'married_jointly') {
-    if (!data.spouseDateOfBirth) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Spouse date of birth is required', path: ['spouseDateOfBirth'] })
-    }
-    if (!data.spouseSex) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Please select spouse biological sex', path: ['spouseSex'] })
-    }
-  }
-})
-
-type FormValues = z.infer<typeof formSchema>
+import { formSchema, FILING_STATUSES, type FormValues } from './_lib/schema'
+import OnboardingWizard from './_components/OnboardingWizard'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -120,7 +92,7 @@ export default function AccountPage() {
         dateOfBirth: '', zipCode: '', filingStatus: '', sex: '', spouseDateOfBirth: '', spouseSex: '',
       }, { keepDirtyValues: true })
     }
-    // Always validate on load so missing required fields (DOB, zip) are highlighted immediately
+    // Always validate on load so missing required fields are highlighted immediately
     setTimeout(() => form.trigger(), 0)
     setLoading(false)
   }
@@ -129,9 +101,8 @@ export default function AccountPage() {
     fetchProfile()
   }, [form, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValues): Promise<boolean> {
     setSaveError(null)
-    console.log('[Account onSubmit] values:', JSON.stringify(values))
     if (profileId) {
       const res = await fetch(`/api/users/${profileId}`, {
         method: 'PATCH',
@@ -140,12 +111,9 @@ export default function AccountPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        console.error('[Account onSubmit] PATCH failed:', res.status, err)
         setSaveError(`Save failed (${res.status}): ${(err as { error?: string }).error ?? 'Unknown error'}`)
-        return
+        return false
       }
-      const saved = await res.json()
-      console.log('[Account onSubmit] PATCH response:', JSON.stringify(saved))
     } else {
       const res = await fetch('/api/users', {
         method: 'POST',
@@ -155,7 +123,7 @@ export default function AccountPage() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setSaveError(`Save failed (${res.status}): ${(err as { error?: string }).error ?? 'Unknown error'}`)
-        return
+        return false
       }
       const created = await res.json()
       setProfileId(created.id)
@@ -168,6 +136,7 @@ export default function AccountPage() {
 
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+    return true
   }
 
   // ── Change Password ──────────────────────────────────────────────────────────
@@ -347,6 +316,16 @@ export default function AccountPage() {
     }
   }
 
+  // ── New user: show onboarding wizard ─────────────────────────────────────
+  if (isNew) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-12">
+        <OnboardingWizard form={form} onSubmit={onSubmit} saveError={saveError} />
+      </main>
+    )
+  }
+
+  // ── Existing user: full account page ─────────────────────────────────────
   return (
     <main className="mx-auto max-w-2xl px-4 py-12 space-y-6">
 
@@ -394,12 +373,8 @@ export default function AccountPage() {
       {/* Profile card */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">{isNew ? 'Welcome — Set Up Your Profile' : 'Your Account'}</CardTitle>
-          <CardDescription>
-            {isNew
-              ? 'Tell us a bit about yourself so we can personalise your retirement planning guidance.'
-              : 'Update your personal details.'}
-          </CardDescription>
+          <CardTitle className="text-2xl">Your Account</CardTitle>
+          <CardDescription>Update your personal details.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -437,23 +412,6 @@ export default function AccountPage() {
                 </FormItem>
               )} />
 
-              <FormField control={form.control} name="filingStatus" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tax Filing Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select a filing status" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {FILING_STATUSES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
               <FormField control={form.control} name="sex" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Biological Sex</FormLabel>
@@ -467,6 +425,23 @@ export default function AccountPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Used for life expectancy calculations.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="filingStatus" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax Filing Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select a filing status" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FILING_STATUSES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -505,9 +480,9 @@ export default function AccountPage() {
               )}
               <div className="flex items-center gap-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Saving...' : isNew ? 'Save & Continue' : 'Save Changes'}
+                  {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
                 </Button>
-                {saved && <p className="text-sm text-green-600">{isNew ? 'Profile created!' : 'Changes saved!'}</p>}
+                {saved && <p className="text-sm text-green-600">Changes saved!</p>}
                 {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               </div>
 
