@@ -14,7 +14,7 @@ export interface TaxInputs {
   capGainsDist: number
   stcg: number
   ltcg: number
-  otherIncome: number      // pension, rental, etc. → ordinary income rates
+  otherIncome: number      // pension, annuities, rental, etc. → ordinary income rates
   iraBalance: number
   iraWithdrawals: number
   qcdPct: number       // % of annual RMD to donate as QCD (0–100); effective age 73+; capped at IRS annual limit

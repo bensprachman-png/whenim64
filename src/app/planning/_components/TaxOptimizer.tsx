@@ -1127,7 +1127,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       <p className="text-xs font-medium text-muted-foreground mb-2">Taxable Income Sources</p>
                       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                         <NumberInput id="w2Income" label="W2 / Salary" value={form.w2Income} onChange={set('w2Income')} />
-                        <NumberInput id="otherIncome" label="Other Income (pension, rental, IRA withdrawals…)" value={form.otherIncome} onChange={set('otherIncome')} />
+                        <NumberInput id="otherIncome" label="Other Income (pension, annuities, rental…)" value={form.otherIncome} onChange={set('otherIncome')} />
                         <NumberInput id="interestIncome" label="Interest Income" value={form.interestIncome} onChange={set('interestIncome')} />
                         <NumberInput id="dividendIncome" label="Qualified Dividends" value={form.dividendIncome} onChange={set('dividendIncome')} />
                         <NumberInput id="capGainsDist" label="Cap Gains Distributions" value={form.capGainsDist} onChange={set('capGainsDist')} />
