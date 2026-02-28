@@ -364,17 +364,6 @@ export default async function DashboardPage() {
                 </table>
               </div>
             )}
-
-            {/* Zone 2 — IRMAA strategy */}
-            <div className="border-t pt-3 mt-3">
-              {hasScenario ? (
-                <ul className="space-y-1 text-sm">
-                  <li><span className="text-foreground font-medium">IRMAA strategy:</span> {irmaaLabels[scenario.irmaaTargetTier ?? 0]}</li>
-                </ul>
-              ) : (
-                <NoPlan page="/planning" label="Set up in Planning" />
-              )}
-            </div>
           </CardContent>
         </Card>
 
