@@ -366,13 +366,14 @@ export default function AccountPage() {
           </div>
           <CardDescription>
             {isPaid
-              ? 'You have full access to all features, including brokerage portfolio import and an ad-free experience.'
-              : 'Upgrade to Premium for an ad-free experience and brokerage portfolio import.'}
+              ? 'You have full access to all features, including the AI Retirement Assistant, brokerage portfolio import, and an ad-free experience.'
+              : 'Upgrade to Premium for the AI Retirement Assistant, an ad-free experience, and brokerage portfolio import.'}
           </CardDescription>
         </CardHeader>
         {!isPaid && (
           <CardContent>
             <ul className="text-sm text-muted-foreground space-y-1 mb-4">
+              <li>✓ AI Retirement Assistant</li>
               <li>✓ Ad-free experience</li>
               <li>✓ Brokerage portfolio import &amp; sync</li>
               <li>✓ All planning and dashboard features</li>
