@@ -34,6 +34,7 @@ export default function AccountPage() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null)
   const [prices, setPrices] = useState<{ monthly: { formatted: string }; yearly: { formatted: string } } | null>(null)
   const [upgradeLoading, setUpgradeLoading] = useState<'monthly' | 'yearly' | 'portal' | null>(null)
+  const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const [checkoutSuccess, setCheckoutSuccess] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<'data' | 'account'>('data')
@@ -166,6 +167,7 @@ export default function AccountPage() {
 
   async function handleUpgrade(plan: 'monthly' | 'yearly') {
     setUpgradeLoading(plan)
+    setUpgradeError(null)
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -173,9 +175,13 @@ export default function AccountPage() {
         body: JSON.stringify({ plan }),
       })
       const data = await res.json()
-      if (data.url) window.location.href = data.url
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        setUpgradeError(data.error ?? 'Could not start checkout. Please try again.')
+      }
     } catch {
-      // silently fail — Stripe unavailable
+      setUpgradeError('Could not connect to payment provider. Please try again.')
     } finally {
       setUpgradeLoading(null)
     }
@@ -486,6 +492,9 @@ export default function AccountPage() {
                   </Button>
                 </div>
               </div>
+              {upgradeError && (
+                <p className="text-sm text-destructive">{upgradeError}</p>
+              )}
             </div>
           )}
         </CardContent>
