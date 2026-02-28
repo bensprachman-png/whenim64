@@ -29,6 +29,12 @@ export default function AccountPage() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPaid, setIsPaid] = useState(false)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null)
+  const [prices, setPrices] = useState<{ monthly: { formatted: string }; yearly: { formatted: string } } | null>(null)
+  const [upgradeLoading, setUpgradeLoading] = useState<'monthly' | 'yearly' | 'portal' | null>(null)
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<'data' | 'account'>('data')
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -69,6 +75,9 @@ export default function AccountPage() {
     if (profile) {
       setHasPassword(profile.hasPassword ?? false)
       setIsPaid(profile.isPaid ?? false)
+      setSubscriptionStatus(profile.subscriptionStatus ?? null)
+      setSubscriptionPlan(profile.subscriptionPlan ?? null)
+      setCurrentPeriodEnd(profile.currentPeriodEnd ?? null)
       const method = profile.twoFactorMethod ?? null
       setTwoFactorMethod(method)
       if (method) setSelectedMethod(method as 'email' | 'totp')
@@ -102,6 +111,17 @@ export default function AccountPage() {
 
   useEffect(() => {
     fetchProfile()
+    // Fetch Stripe prices for display
+    fetch('/api/stripe/prices')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.monthly) setPrices(data) })
+      .catch(() => {})
+    // Detect successful checkout redirect
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('checkout') === 'success') {
+      setCheckoutSuccess(true)
+      window.history.replaceState({}, '', '/account')
+    }
   }, [form, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onSubmit(values: FormValues): Promise<boolean> {
@@ -140,6 +160,38 @@ export default function AccountPage() {
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
     return true
+  }
+
+  // ── Stripe ───────────────────────────────────────────────────────────────────
+
+  async function handleUpgrade(plan: 'monthly' | 'yearly') {
+    setUpgradeLoading(plan)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch {
+      // silently fail — Stripe unavailable
+    } finally {
+      setUpgradeLoading(null)
+    }
+  }
+
+  async function handleManageSubscription() {
+    setUpgradeLoading('portal')
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch {
+      // silently fail
+    } finally {
+      setUpgradeLoading(null)
+    }
   }
 
   // ── Change Password ──────────────────────────────────────────────────────────
@@ -353,24 +405,90 @@ export default function AccountPage() {
               : 'Upgrade to Premium for the AI Retirement Assistant, an ad-free experience, and brokerage portfolio import.'}
           </CardDescription>
         </CardHeader>
-        {!isPaid && (
-          <CardContent>
-            <ul className="text-sm text-muted-foreground space-y-1 mb-4">
-              <li>✓ AI Retirement Assistant</li>
-              <li>✓ Ad-free experience</li>
-              <li>✓ Brokerage portfolio import &amp; sync</li>
-              <li>✓ All planning and dashboard features</li>
-            </ul>
-            <button
-              disabled
-              title="Subscription billing coming soon"
-              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"
-            >
-              Upgrade to Premium
-            </button>
-            <p className="text-xs text-muted-foreground mt-2">Subscription billing coming soon.</p>
-          </CardContent>
-        )}
+        <CardContent>
+          {checkoutSuccess && (
+            <div className="mb-4 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-400">
+              <strong>Payment received — welcome to Premium!</strong> Your account will be upgraded within a few seconds. Refresh if features haven&apos;t unlocked yet.
+            </div>
+          )}
+
+          {isPaid ? (
+            /* ── Paid: show plan details + manage button ── */
+            <div className="space-y-3">
+              <div className="text-sm text-muted-foreground space-y-1">
+                {subscriptionPlan && (
+                  <p>Plan: <span className="font-medium text-foreground capitalize">{subscriptionPlan}</span></p>
+                )}
+                {subscriptionStatus && subscriptionStatus !== 'active' && (
+                  <p>Status: <span className="font-medium text-amber-600 dark:text-amber-400 capitalize">{subscriptionStatus.replace('_', ' ')}</span></p>
+                )}
+                {currentPeriodEnd && (
+                  <p>
+                    {subscriptionStatus === 'canceled' ? 'Access until' : 'Renews'}:{' '}
+                    <span className="font-medium text-foreground">
+                      {new Date(currentPeriodEnd * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManageSubscription}
+                disabled={upgradeLoading === 'portal'}
+              >
+                {upgradeLoading === 'portal' ? 'Opening…' : 'Manage Subscription'}
+              </Button>
+            </div>
+          ) : (
+            /* ── Free: show pricing cards ── */
+            <div className="space-y-4">
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>✓ AI Retirement Assistant</li>
+                <li>✓ Ad-free experience</li>
+                <li>✓ Brokerage portfolio import &amp; sync</li>
+                <li>✓ All planning and dashboard features</li>
+              </ul>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div>
+                    <p className="font-semibold">Monthly</p>
+                    <p className="text-2xl font-bold mt-1">
+                      {prices?.monthly.formatted ?? '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Billed monthly · cancel anytime</p>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleUpgrade('monthly')}
+                    disabled={upgradeLoading !== null}
+                  >
+                    {upgradeLoading === 'monthly' ? 'Redirecting…' : 'Get Monthly'}
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-primary/50 bg-primary/5 p-4 space-y-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">Yearly</p>
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Best value</span>
+                    </div>
+                    <p className="text-2xl font-bold mt-1">
+                      {prices?.yearly.formatted ?? '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Billed annually · cancel anytime</p>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleUpgrade('yearly')}
+                    disabled={upgradeLoading !== null}
+                  >
+                    {upgradeLoading === 'yearly' ? 'Redirecting…' : 'Get Yearly'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Profile card */}

@@ -96,6 +96,11 @@ export const profiles = sqliteTable('profiles', {
   createdAt: text().notNull(),
   twoFactorMethod: text(),
   isPaid: int({ mode: 'boolean' }).notNull().default(false),
+  stripeCustomerId: text(),
+  stripeSubscriptionId: text(),
+  subscriptionStatus: text(),   // 'active' | 'trialing' | 'past_due' | 'canceled' | null
+  subscriptionPlan: text(),     // 'monthly' | 'yearly' | null
+  currentPeriodEnd: int(),      // Unix timestamp
 })
 
 export const snaptradeConnections = sqliteTable('snaptradeConnections', {
