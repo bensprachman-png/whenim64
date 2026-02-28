@@ -1004,7 +1004,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       {/* No-DOB warning */}
       {birthYear === null && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400">
-          Add your date of birth in your profile to see age-based calculations (RMD, IRMAA).
+          Add your date of birth in <a href="/account" className="underline font-medium">Account</a> to see age-based calculations (RMD, IRMAA).
         </div>
       )}
 
