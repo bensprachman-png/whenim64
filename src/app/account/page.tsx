@@ -113,7 +113,6 @@ export default function AccountPage() {
         spouseDateOfBirth: profile.spouseDateOfBirth ?? '',
         spouseSex: profile.spouseSex ?? '',
       }, { keepDirtyValues: true })
-      setTimeout(() => form.trigger(), 0)
     } else {
       form.reset({
         name: session?.user?.name ?? '',
@@ -121,6 +120,8 @@ export default function AccountPage() {
         dateOfBirth: '', zipCode: '', filingStatus: '',
       }, { keepDirtyValues: true })
     }
+    // Always validate on load so missing required fields (DOB, zip) are highlighted immediately
+    setTimeout(() => form.trigger(), 0)
     setLoading(false)
   }
 
