@@ -36,6 +36,7 @@ export default function AccountPage() {
   const [prices, setPrices] = useState<{ monthly: { formatted: string }; yearly: { formatted: string } } | null>(null)
   const [upgradeLoading, setUpgradeLoading] = useState<'monthly' | 'yearly' | 'portal' | 'upgrade' | null>(null)
   const [upgradeError, setUpgradeError] = useState<string | null>(null)
+  const [upgradeToAnnualOpen, setUpgradeToAnnualOpen] = useState(false)
   const [checkoutSuccess, setCheckoutSuccess] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<'data' | 'account'>('data')
@@ -199,9 +200,10 @@ export default function AccountPage() {
     }
   }
 
-  async function handleUpgradeToAnnual() {
+  async function confirmUpgradeToAnnual() {
     setUpgradeLoading('upgrade')
     setUpgradeError(null)
+    setUpgradeToAnnualOpen(false)
     try {
       const res = await fetch('/api/stripe/upgrade', { method: 'POST' })
       const data = await res.json()
@@ -480,7 +482,7 @@ export default function AccountPage() {
                 {subscriptionPlan === 'monthly' && (
                   <Button
                     size="sm"
-                    onClick={handleUpgradeToAnnual}
+                    onClick={() => setUpgradeToAnnualOpen(true)}
                     disabled={upgradeLoading !== null}
                   >
                     {upgradeLoading === 'upgrade' ? 'Switching…' : 'Switch to Annual'}
@@ -781,6 +783,28 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog: Switch to Annual confirmation */}
+      <Dialog open={upgradeToAnnualOpen} onOpenChange={setUpgradeToAnnualOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Switch to Annual Plan</DialogTitle>
+            <DialogDescription>
+              Your card on file will be charged{prices?.yearly.formatted ? ` ${prices.yearly.formatted.replace('/year', '')}` : ''} today,
+              minus a prorated credit for the unused portion of your current monthly period.
+              Your subscription will then renew annually.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUpgradeToAnnualOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmUpgradeToAnnual}>
+              Confirm &amp; Pay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: TOTP verification before changing password */}
       <Dialog
