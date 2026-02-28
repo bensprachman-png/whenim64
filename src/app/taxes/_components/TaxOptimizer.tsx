@@ -640,7 +640,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                   <p className="text-xs font-medium text-muted-foreground mb-2">Additional Accounts (not connected)</p>
                   <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                     <div>
-                      <NumberInput id="iraBalance" label="IRA / 401k Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" />
+                      <NumberInput id="iraBalance" label="IRA / 401k / 403b Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" />
                       {brokerageIraTotal > 0 && numVal(form.iraBalance) > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageIraTotal + numVal(form.iraBalance))}</p>
                       )}

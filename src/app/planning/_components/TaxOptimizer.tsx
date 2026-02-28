@@ -1079,7 +1079,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                       <p className="text-xs font-medium text-muted-foreground mb-2">Additional Accounts (not connected)</p>
                       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
                         <div>
-                          <NumberInput id="iraBalance" label="IRA / 401k Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" highlight={assetsNeedInput} />
+                          <NumberInput id="iraBalance" label="IRA / 401k / 403b Balance" value={form.iraBalance} onChange={set('iraBalance')} step="1000" highlight={assetsNeedInput} />
                           {brokerageIraTotal > 0 && numVal(form.iraBalance) > 0 && (
                             <p className="text-xs text-muted-foreground mt-1">Total in model: {fmtK(brokerageIraTotal + numVal(form.iraBalance))}</p>
                           )}
@@ -1553,7 +1553,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                 <p className="text-lg font-bold tabular-nums text-sky-500">{fmtK(fundingProjection.startTaxable)}</p>
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs text-muted-foreground font-medium">Starting IRA / 401k</p>
+                <p className="text-xs text-muted-foreground font-medium">Starting IRA / 401k / 403b</p>
                 <p className="text-lg font-bold tabular-nums text-indigo-500">{fmtK(fundingProjection.startIra)}</p>
               </div>
               <div className="space-y-0.5">
@@ -1565,7 +1565,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                 <p className={`text-lg font-bold tabular-nums ${fundingProjection.endTaxable > 0 ? 'text-sky-500' : 'text-muted-foreground'}`}>{fmtK(fundingProjection.endTaxable)}</p>
               </div>
               <div className="space-y-0.5">
-                <p className="text-xs text-muted-foreground font-medium">Ending IRA / 401k</p>
+                <p className="text-xs text-muted-foreground font-medium">Ending IRA / 401k / 403b</p>
                 <p className={`text-lg font-bold tabular-nums ${fundingProjection.endIra > 0 ? 'text-indigo-500' : 'text-muted-foreground'}`}>{fmtK(fundingProjection.endIra)}</p>
               </div>
               <div className="space-y-0.5">
@@ -1650,7 +1650,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                         <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md space-y-1 min-w-[200px]">
                           <p className="font-semibold text-sm">Year {d.year}{d.age > 0 ? ` · Age ${d.age}` : ''}</p>
                           <p className="text-sky-500">Taxable: <span className="font-medium text-foreground">{fmtCurrency(d.taxable)}</span></p>
-                          <p className="text-indigo-400">IRA / 401k: <span className="font-medium text-foreground">{fmtCurrency(d.ira)}</span></p>
+                          <p className="text-indigo-400">IRA / 401k / 403b: <span className="font-medium text-foreground">{fmtCurrency(d.ira)}</span></p>
                           <p className="text-emerald-500">Roth IRA: <span className="font-medium text-foreground">{fmtCurrency(d.roth)}</span></p>
                           <p className="text-muted-foreground border-t pt-1">Portfolio total: <span className="font-medium text-foreground">{fmtCurrency(portfolioTotal)}</span></p>
                           <div className="border-t pt-1 space-y-0.5">
@@ -1675,7 +1675,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                     verticalAlign="bottom"
                     content={({ payload }) => {
                       if (!payload?.length) return null
-                      const order = ['Taxable', 'IRA / 401k', 'Roth IRA', 'Living Expenses', 'Taxes', 'IRMAA']
+                      const order = ['Taxable', 'IRA / 401k / 403b', 'Roth IRA', 'Living Expenses', 'Taxes', 'IRMAA']
                       const sorted = [...payload].sort((a, b) => {
                         const ai = order.indexOf(a.value as string)
                         const bi = order.indexOf(b.value as string)

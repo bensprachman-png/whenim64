@@ -428,7 +428,7 @@ export default async function DashboardPage() {
               {hasIRA ? (
                 <ul className="space-y-1 text-sm">
                   {scenario.iraBalance > 0 && (
-                    <li><span className="text-foreground font-medium">IRA / 401k balance:</span> {fmtK(scenario.iraBalance)}</li>
+                    <li><span className="text-foreground font-medium">IRA / 401k / 403b balance:</span> {fmtK(scenario.iraBalance)}</li>
                   )}
                   {scenario.rothBalance > 0 && (
                     <li><span className="text-foreground font-medium">Roth IRA balance:</span> {fmtK(scenario.rothBalance)}</li>
