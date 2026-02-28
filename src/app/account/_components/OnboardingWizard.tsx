@@ -63,7 +63,7 @@ export default function OnboardingWizard({ form, onSubmit, saveError }: Props) {
 
   const handleFinalSubmit = form.handleSubmit(async (values) => {
     const ok = await onSubmit(values)
-    if (ok) router.push('/dashboard')
+    if (ok) router.push('/planning?welcome=1')
   })
 
   const filingStatus = form.watch('filingStatus')

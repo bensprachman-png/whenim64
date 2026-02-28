@@ -16,6 +16,7 @@ import { computeProjectionYears } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
 import type { Metadata } from 'next'
 import TaxOptimizer from './_components/TaxOptimizer'
+import PlanningWelcomeSplash from './_components/PlanningWelcomeSplash'
 import AdBanner from '@/components/AdBanner'
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export const dynamic = 'force-dynamic'
 export default async function PlanningPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>
+  searchParams: Promise<{ year?: string; welcome?: string }>
 }) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
@@ -87,10 +88,12 @@ export default async function PlanningPage({
 
   const params = await searchParams
   const year = resolveYear(params.year)
+  const showWelcome = params.welcome === '1'
   const yd = getYearData(year)
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
+      <PlanningWelcomeSplash show={showWelcome} />
       <MilestoneTimeline dateOfBirth={dob} highlight={['rmd']} planEndsYear={planEndsYear} planToAge={planToAge || null} />
 
       <div className="flex items-start justify-between gap-4 mb-2">
