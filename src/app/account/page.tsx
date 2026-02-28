@@ -42,28 +42,16 @@ export default function AccountPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  // Poll for subscription activation after a successful checkout redirect
+  // After checkout success, sync subscription directly from Stripe then refresh profile
   useEffect(() => {
     if (!checkoutSuccess || isPaid) return
-    let attempts = 0
-    const interval = setInterval(async () => {
-      attempts++
-      try {
-        const res = await fetch('/api/users')
-        if (!res.ok) return
-        const profile = await res.json()
-        if (profile?.isPaid) {
-          setIsPaid(true)
-          setSubscriptionStatus(profile.subscriptionStatus ?? null)
-          setSubscriptionPlan(profile.subscriptionPlan ?? null)
-          setCurrentPeriodEnd(profile.currentPeriodEnd ?? null)
-          clearInterval(interval)
-        }
-      } catch { /* ignore */ }
-      if (attempts >= 10) clearInterval(interval)
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [checkoutSuccess, isPaid])
+    fetch('/api/stripe/sync', { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.synced) fetchProfile()
+      })
+      .catch(() => {})
+  }, [checkoutSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
