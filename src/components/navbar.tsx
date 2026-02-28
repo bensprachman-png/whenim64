@@ -106,11 +106,11 @@ export default function Navbar() {
                 <LogOut className="size-[18px]" />
               </Button>
             </div>
-          ) : (
+          ) : pathname !== '/login' ? (
             <Button asChild size="sm" className="ml-4">
               <Link href="/login">Sign In</Link>
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />

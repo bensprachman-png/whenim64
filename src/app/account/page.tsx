@@ -117,7 +117,7 @@ export default function AccountPage() {
       form.reset({
         name: session?.user?.name ?? '',
         email: session?.user?.email ?? '',
-        dateOfBirth: '', zipCode: '', filingStatus: '',
+        dateOfBirth: '', zipCode: '', filingStatus: '', sex: '', spouseDateOfBirth: '', spouseSex: '',
       }, { keepDirtyValues: true })
     }
     // Always validate on load so missing required fields (DOB, zip) are highlighted immediately
@@ -500,6 +500,9 @@ export default function AccountPage() {
                 </>
               )}
 
+              {Object.keys(form.formState.errors).length > 0 && (
+                <p className="text-sm text-destructive">Please fill in the missing information above.</p>
+              )}
               <div className="flex items-center gap-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? 'Saving...' : isNew ? 'Save & Continue' : 'Save Changes'}
