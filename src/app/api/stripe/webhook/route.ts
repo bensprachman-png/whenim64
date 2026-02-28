@@ -21,6 +21,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  console.log('[stripe/webhook] received:', event.type, event.id)
+
   try {
     switch (event.type) {
 
@@ -31,7 +33,6 @@ export async function POST(request: Request) {
         const customerId = session.customer as string
         const subscriptionId = session.subscription as string
 
-        // Metadata set on subscription_data at checkout creation is on the subscription itself
         const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
           expand: ['items.data'],
         })
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
         const periodEnd = getPeriodEnd(subscription)
         const status = subscription.status
         const isPaid = status === 'active' || status === 'trialing'
+
+        console.log('[stripe/webhook] checkout.session.completed — userId:', userId, 'customerId:', customerId, 'status:', status)
 
         const updates = {
           stripeCustomerId: customerId,
@@ -51,10 +54,12 @@ export async function POST(request: Request) {
         }
 
         if (userId) {
-          await db.update(profiles).set(updates).where(eq(profiles.userId, userId))
+          const result = await db.update(profiles).set(updates).where(eq(profiles.userId, userId))
+          console.log('[stripe/webhook] updated by userId — rows affected:', JSON.stringify(result))
         } else {
-          // Fallback: match by customer ID (stripeCustomerId was stored at checkout-session creation)
-          await db.update(profiles).set(updates).where(eq(profiles.stripeCustomerId, customerId))
+          console.warn('[stripe/webhook] no userId in metadata, falling back to customerId:', customerId)
+          const result = await db.update(profiles).set(updates).where(eq(profiles.stripeCustomerId, customerId))
+          console.log('[stripe/webhook] updated by customerId — rows affected:', JSON.stringify(result))
         }
         break
       }
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
+        console.log('[stripe/webhook]', event.type, '— customerId:', subscription.customer, 'status:', subscription.status)
         await db.update(profiles)
           .set({
             stripeSubscriptionId: subscription.id,
@@ -80,6 +86,7 @@ export async function POST(request: Request) {
         const subscription = await stripe.subscriptions.retrieve(invoice.subscription, {
           expand: ['items.data'],
         })
+        console.log('[stripe/webhook] invoice.payment_succeeded — customerId:', invoice.customer)
         await db.update(profiles)
           .set({
             subscriptionStatus: subscription.status,
@@ -92,6 +99,7 @@ export async function POST(request: Request) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
+        console.log('[stripe/webhook] invoice.payment_failed — customerId:', invoice.customer)
         await db.update(profiles)
           .set({ subscriptionStatus: 'past_due', isPaid: false })
           .where(eq(profiles.stripeCustomerId, invoice.customer as string))
