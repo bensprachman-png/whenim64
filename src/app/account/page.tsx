@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession, authClient } from '@/lib/auth-client'
 
+import { CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -40,6 +41,29 @@ export default function AccountPage() {
   const [deleteScope, setDeleteScope] = useState<'data' | 'account'>('data')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Poll for subscription activation after a successful checkout redirect
+  useEffect(() => {
+    if (!checkoutSuccess || isPaid) return
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts++
+      try {
+        const res = await fetch('/api/users')
+        if (!res.ok) return
+        const profile = await res.json()
+        if (profile?.isPaid) {
+          setIsPaid(true)
+          setSubscriptionStatus(profile.subscriptionStatus ?? null)
+          setSubscriptionPlan(profile.subscriptionPlan ?? null)
+          setCurrentPeriodEnd(profile.currentPeriodEnd ?? null)
+          clearInterval(interval)
+        }
+      } catch { /* ignore */ }
+      if (attempts >= 10) clearInterval(interval)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [checkoutSuccess, isPaid])
 
   // Which method to enable when the toggle is turned on (while 2FA is off)
   const [selectedMethod, setSelectedMethod] = useState<'email' | 'totp'>('email')
@@ -412,31 +436,40 @@ export default function AccountPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {checkoutSuccess && (
-            <div className="mb-4 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-400">
-              <strong>Payment received — welcome to Premium!</strong> Your account will be upgraded within a few seconds. Refresh if features haven&apos;t unlocked yet.
-            </div>
-          )}
-
           {isPaid ? (
-            /* ── Paid: show plan details + manage button ── */
-            <div className="space-y-3">
-              <div className="text-sm text-muted-foreground space-y-1">
-                {subscriptionPlan && (
-                  <p>Plan: <span className="font-medium text-foreground capitalize">{subscriptionPlan}</span></p>
-                )}
-                {subscriptionStatus && subscriptionStatus !== 'active' && (
-                  <p>Status: <span className="font-medium text-amber-600 dark:text-amber-400 capitalize">{subscriptionStatus.replace('_', ' ')}</span></p>
-                )}
-                {currentPeriodEnd && (
-                  <p>
-                    {subscriptionStatus === 'canceled' ? 'Access until' : 'Renews'}:{' '}
-                    <span className="font-medium text-foreground">
-                      {new Date(currentPeriodEnd * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                    </span>
-                  </p>
-                )}
+            /* ── Paid: Premium status card ── */
+            <div className="space-y-4">
+              {checkoutSuccess && (
+                <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-400">
+                  <strong>Welcome to Premium!</strong> Your account is now fully unlocked.
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="font-semibold">Premium Member</p>
+                  {subscriptionPlan && (
+                    <p className="text-xs text-muted-foreground capitalize">{subscriptionPlan} plan</p>
+                  )}
+                </div>
               </div>
+              {currentPeriodEnd && (
+                <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">
+                    {subscriptionStatus === 'canceled' ? 'Access until' : 'Next payment'}:
+                  </span>{' '}
+                  <span className="font-medium">
+                    {new Date(currentPeriodEnd * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </span>
+                </div>
+              )}
+              {subscriptionStatus && subscriptionStatus !== 'active' && (
+                <p className="text-sm">
+                  Status: <span className="font-medium text-amber-600 dark:text-amber-400 capitalize">{subscriptionStatus.replace('_', ' ')}</span>
+                </p>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -447,7 +480,13 @@ export default function AccountPage() {
               </Button>
             </div>
           ) : (
-            /* ── Free: show pricing cards ── */
+            /* ── Free: show checkout-processing banner or pricing cards ── */
+            <>
+            {checkoutSuccess && (
+              <div className="mb-4 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-400">
+                <strong>Payment received — activating your account…</strong> This usually takes a few seconds. Refresh if the page doesn&apos;t update automatically.
+              </div>
+            )}
             <div className="space-y-4">
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>✓ AI Retirement Assistant</li>
@@ -496,6 +535,7 @@ export default function AccountPage() {
                 <p className="text-sm text-destructive">{upgradeError}</p>
               )}
             </div>
+            </>
           )}
         </CardContent>
       </Card>
