@@ -9,6 +9,9 @@ export default function PlanningWelcomeSplash({ show }: { show: boolean }) {
 
   function handleClose() {
     router.replace('/planning')
+    setTimeout(() => {
+      document.getElementById('assets-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 150)
   }
 
   return (

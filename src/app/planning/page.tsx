@@ -339,6 +339,7 @@ export default async function PlanningPage({
           brokerageRothAccounts={brokerageRothAccounts}
           brokerageTaxableAccounts={brokerageTaxableAccounts}
           stateInfo={stateInfo}
+          isPaid={isPaid}
         />
       </section>
 

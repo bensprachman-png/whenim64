@@ -53,6 +53,7 @@ interface Props {
   brokerageRothAccounts: BrokerageAccountInfo[]
   brokerageTaxableAccounts: BrokerageAccountInfo[]
   stateInfo: StateInfo | null
+  isPaid: boolean
 }
 
 function fmtK(n: number): string {
@@ -247,7 +248,7 @@ function ssAdjustmentPct(birthYear: number, startYear: number): number {
   return -(36 * 5 / 9 + (early - 36) * 5 / 12)
 }
 
-export default function TaxOptimizer({ initialScenario, birthYear, defaultFilingStatus, defaultSsStartYear, sex, spouseBirthYear, spouseSex, brokerageIraAccounts, brokerageRothAccounts, brokerageTaxableAccounts, stateInfo }: Props) {
+export default function TaxOptimizer({ initialScenario, birthYear, defaultFilingStatus, defaultSsStartYear, sex, spouseBirthYear, spouseSex, brokerageIraAccounts, brokerageRothAccounts, brokerageTaxableAccounts, stateInfo, isPaid }: Props) {
   const isJoint = defaultFilingStatus === 'married_jointly' || defaultFilingStatus === 'joint'
   const taxFiling: FilingStatus = isJoint ? 'joint' : 'single'
 
@@ -1021,7 +1022,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
               <Accordion type="single" defaultValue={assetsNeedInput ? 'assets' : ssNeedsInput ? 'ss' : expensesNeedInput ? 'expenses' : 'assets'} collapsible className="space-y-2">
 
                 {/* ── 1: Assets ── */}
-                <AccordionItem value="assets" className="rounded-lg border overflow-hidden">
+                <AccordionItem id="assets-section" value="assets" className="rounded-lg border overflow-hidden">
                   <AccordionTrigger className="text-sm font-semibold px-4 bg-muted/40 hover:bg-muted/60 hover:no-underline rounded-none data-[state=open]:border-b">
                     <span className="flex items-center">Assets{assetsNeedInput && <NeedsInputBadge />}</span>
                   </AccordionTrigger>
@@ -1029,9 +1030,14 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
 
                     {/* Connected Brokerages */}
                     <div className="rounded-md border bg-muted/30 px-4 py-3 space-y-2 text-sm">
-                      <p className="text-xs font-semibold text-muted-foreground">
+                      <p className="text-xs font-semibold text-muted-foreground flex items-center gap-2 flex-wrap">
                         Connected Brokerages — auto-synced from{' '}
                         <a href="/portfolio" className="text-primary underline hover:no-underline">Portfolio</a>
+                        {!isPaid && (
+                          <span className="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-400 leading-none">
+                            Premium
+                          </span>
+                        )}
                       </p>
                       {brokerageIraAccounts.length === 0 && brokerageRothAccounts.length === 0 && brokerageTaxableAccounts.length === 0 ? (
                         <p className="text-xs text-muted-foreground">
@@ -1257,6 +1263,10 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
                           Create a free account at{' '}
                           <a href="https://www.ssa.gov/myaccount/" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline font-medium">ssa.gov/myaccount</a>{' '}
                           to view your personalized estimate, verify your earnings record, and download your statement.
+                        </p>
+                        <p>
+                          For more help and detailed information about Social Security benefit strategies and claiming timing,{' '}
+                          <a href="/social-security" className="underline hover:no-underline font-medium text-foreground">visit the Social Security page</a>.
                         </p>
                       </div>
                     </div>

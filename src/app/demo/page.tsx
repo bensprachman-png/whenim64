@@ -339,6 +339,7 @@ export default async function DemoPage({
           brokerageRothAccounts={[]}
           brokerageTaxableAccounts={[]}
           stateInfo={stateInfo}
+          isPaid={false}
         />
       </section>
 
