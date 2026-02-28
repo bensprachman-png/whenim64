@@ -39,6 +39,7 @@ export interface TaxInputs {
   spouseSsPaymentsPerYear: number
   spouseSex: Sex | null     // spouse's biological sex (for life expectancy)
   stateTaxRate: number      // effective state income tax rate (0–1); 0 = no state tax
+  stateExemptRetirement: boolean  // when true, SS benefits and IRA/RMD distributions are exempt from state tax (e.g. PA, IL, MS, IA)
   planToAge: number         // override primary life expectancy (0 = use SSA)
   spousePlanToAge: number   // override spouse life expectancy (0 = use SSA)
   // Pre-retirement contributions — applied each year through retirementYear, then stop
@@ -286,7 +287,7 @@ interface YearMetrics {
   effectiveRatePct: number; irmaaAnnual: number; totalCost: number
 }
 
-function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number, medicareStartYear: number): YearMetrics {
+function computeYearMetrics(base: YearBase, rothConversion: number, year: number, inflationPct: number, medicareEnrollees: 1 | 2, stateTaxRate: number, medicareStartYear: number, stateExemptRetirement: boolean): YearMetrics {
   const { w2, ss, iraWithdrawal, interestIncome, dividendIncome, capGainsDist, stcg, ltcg, otherIncome, qcds, age, filing } = base
 
   // Inflation factor: scales CPI-indexed thresholds (brackets, std deduction, LTCG) from 2025 base.
@@ -311,8 +312,13 @@ function computeYearMetrics(base: YearBase, rothConversion: number, year: number
   const ordinaryTaxable = Math.max(0, taxableIncome - ltcgAmount)
   const federalTax = calcOrdinaryTax(ordinaryTaxable, filing, inflFactor)
   const ltcgTax = calcLtcgTax(ltcgAmount, taxableIncome, filing, inflFactor)
-  // State tax: applied to full MAGI (many states use own deductions, but MAGI is a reasonable proxy)
-  const stateTax = magi * stateTaxRate
+  // State tax: for retirement-exempt states (PA, IL, MS, IA), SS benefits and IRA/RMD distributions
+  // are exempt; only W2, investment income, other income, and Roth conversions are taxed.
+  // For all other states, apply to full MAGI.
+  const stateTaxBase = stateExemptRetirement
+    ? Math.max(0, magi - taxableSS - iraWithdrawal)
+    : magi
+  const stateTax = stateTaxBase * stateTaxRate
   const totalTax = federalTax + ltcgTax + stateTax
   const effectiveRatePct = totalTax / Math.max(1, magi) * 100
 
@@ -346,7 +352,7 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     stcg, ltcg, otherIncome, iraWithdrawals, qcdPct,
     portfolioGrowthPct, retirementYear, ssStartYear, ssPaymentsPerYear,
     filing, birthYear, startYear, projectionYears, irmaaTargetTier, inflationPct, conversionStopYear, medicareEnrollees, medicareStartYear,
-    sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex, stateTaxRate,
+    sex, spouseBirthYear, spouseSsStartYear, spouseSsPaymentsPerYear, spouseSex, stateTaxRate, stateExemptRetirement,
     planToAge, spousePlanToAge,
     annualDeferredContrib, annualRothContrib, annualEmployerMatch,
     spouseAnnualDeferredContrib, spouseAnnualRothContrib, spouseAnnualEmployerMatch,
@@ -437,11 +443,11 @@ function runScenario(inputs: TaxInputs, applyConversions: boolean): ScenarioRow[
     let metrics: YearMetrics
 
     if (!applyConversions || year >= conversionStopYear) {
-      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
+      metrics = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear, stateExemptRetirement)
     } else {
-      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
+      const baseMet = computeYearMetrics(base, 0, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear, stateExemptRetirement)
       rothConversion = computeConversionAmount(baseMet.magi, iraBalance, yearFiling, irmaaTargetTier, year, inflationPct)
-      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear)
+      const optMet = computeYearMetrics(base, rothConversion, year, inflationPct, yearMedicareEnrollees, stateTaxRate, effectiveMedicareStartYear, stateExemptRetirement)
       conversionTax = optMet.totalTax - baseMet.totalTax
       metrics = optMet
       iraBalance = Math.max(0, iraBalance - rothConversion)

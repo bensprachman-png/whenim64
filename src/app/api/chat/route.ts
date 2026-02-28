@@ -4,12 +4,12 @@ import { profiles, taxScenarios, brokerageAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
-import { getFullRetirementAge, fraToString, calculateMilestones } from '@/lib/milestones'
+import { getFullRetirementAge, fraToString, calculateMilestones, getRmdAge } from '@/lib/milestones'
 import { auth } from '@/lib/auth'
 import { SUPPORTED_YEARS, resolveYear, getYearData } from '@/lib/retirement-data'
 import { projectTaxes, computeProjectionYears, type IrmaaTargetTier, type Sex } from '@/lib/tax-engine'
 import { categorizeAccountType } from '@/lib/snaptrade'
-import { getStateTaxRate } from '@/lib/state-tax'
+import { getStateInfo } from '@/lib/state-tax'
 
 const SYSTEM_PROMPT = `You are a knowledgeable, friendly retirement planning assistant for WhenIm64. You help users understand:
 
@@ -169,11 +169,13 @@ async function buildPlanningContext(
   const filing = (user?.filingStatus === 'married_jointly') ? 'joint' : 'single' as const
   const sex: Sex | null = (user?.sex === 'male' || user?.sex === 'female') ? user.sex as Sex : null
   const spouseSex: Sex | null = (user?.spouseSex === 'male' || user?.spouseSex === 'female') ? user.spouseSex as Sex : null
-  const stateTaxRate = user?.zipCode ? getStateTaxRate(user.zipCode) : 0
+  const stateInfo = user?.zipCode ? getStateInfo(user.zipCode) : null
+  const stateTaxRate = stateInfo?.rate ?? 0
+  const stateExemptRetirement = stateInfo?.retirementExempt ?? false
 
   const startYear = new Date().getFullYear()
   const ssStart = ts.ssStartYear ?? 0
-  const rmdStart = birthYear + 73
+  const rmdStart = birthYear > 0 ? birthYear + getRmdAge(birthYear) : 9999
   const convStop =
     ts.conversionWindow === 'before-ss'  ? (ssStart || 9999) :
     ts.conversionWindow === 'before-rmd' ? rmdStart :
@@ -221,6 +223,7 @@ async function buildPlanningContext(
       spouseSsPaymentsPerYear: ts.spouseSsPaymentsPerYear ?? 0,
       spouseSex,
       stateTaxRate,
+      stateExemptRetirement,
       planToAge:             ts.planToAge ?? 0,
       spousePlanToAge:       ts.spousePlanToAge ?? 0,
       annualDeferredContrib: ts.annualDeferredContrib ?? 0,

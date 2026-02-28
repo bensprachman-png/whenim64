@@ -1,7 +1,10 @@
 // State income tax estimation for retirement income.
-// Rates are approximate effective rates on ordinary retirement income
-// (IRA distributions, pensions, interest) after typical state-level
-// exemptions and deductions for retirees. Treat as estimates only.
+// Each entry has:
+//   rate             — statutory flat/effective rate applied to taxable income
+//   retirementExempt — true when SS benefits and qualified IRA/401k/pension
+//                      distributions are exempt from state tax; only W2 wages,
+//                      investment income, and other non-retirement income are taxed.
+// Sources: state DOR publications, Tax Foundation, AARP state tax guides (2024–2025).
 
 // ─── Zip code → state mapping ─────────────────────────────────────────────────
 // Sorted [start3, end3, stateCode] — first 3 digits of the zip code.
@@ -57,74 +60,84 @@ export function getStateName(stateCode: string): string {
   return STATE_NAMES[stateCode] ?? stateCode
 }
 
-// ─── Effective state tax rates on retirement ordinary income ──────────────────
-// These are approximate effective rates after typical senior exemptions.
-// Sources: state DOR publications, Tax Foundation, AARP state tax guides (2024–2025).
-const STATE_RATES: Record<string, number> = {
+// ─── State tax data ────────────────────────────────────────────────────────────
+const STATE_DATA: Record<string, { rate: number; retirementExempt: boolean }> = {
   // No state income tax
-  AK: 0.000, FL: 0.000, NV: 0.000, SD: 0.000,
-  TN: 0.000, TX: 0.000, WA: 0.000, WY: 0.000,
-  NH: 0.000, // dividend/interest tax fully repealed 2025
+  AK: { rate: 0.000, retirementExempt: false },
+  FL: { rate: 0.000, retirementExempt: false },
+  NV: { rate: 0.000, retirementExempt: false },
+  SD: { rate: 0.000, retirementExempt: false },
+  TN: { rate: 0.000, retirementExempt: false },
+  TX: { rate: 0.000, retirementExempt: false },
+  WA: { rate: 0.000, retirementExempt: false },
+  WY: { rate: 0.000, retirementExempt: false },
+  NH: { rate: 0.000, retirementExempt: false }, // dividend/interest tax fully repealed 2025
 
-  // Broad retirement income exemptions → near-zero effective rate
-  IL: 0.000, // 4.95% flat but all retirement income (IRA, pension, SS) exempt
-  MS: 0.000, // 5% flat but all retirement income exempt
-  PA: 0.000, // 3.07% flat but all retirement income (IRA, pension, SS) exempt
-  IA: 0.000, // all retirement income exempt for those 55+ starting 2023
+  // States with broad retirement income exemptions:
+  // SS benefits and qualified IRA/401k/pension distributions are exempt.
+  // W2 wages, investment income, and non-qualified income are still taxable.
+  IL: { rate: 0.0495, retirementExempt: true }, // 4.95% flat; all retirement income exempt
+  MS: { rate: 0.050,  retirementExempt: true }, // 5% flat; all retirement income exempt
+  PA: { rate: 0.0307, retirementExempt: true }, // 3.07% flat; all retirement income exempt
+  IA: { rate: 0.038,  retirementExempt: true }, // 3.8% flat; all retirement income exempt for 55+
 
-  // Low effective rates
-  AZ: 0.025, // 2.5% flat (2023+); small deduction for SS
-  IN: 0.030, // 3.05% flat
-  AL: 0.030, // SS + most pensions exempt; ~3% on IRA distributions
-  LA: 0.030, // ~3% effective after flat rate reform and exemptions
-  ND: 0.020, // 2.5% flat; SS largely exempt
-  OH: 0.030, // graduated to 3.5%; senior/retirement credits
-  CO: 0.035, // 4.4% flat but $24k pension/IRA senior deduction
-  KY: 0.040, // 4% flat; $31k pension exemption
-  GA: 0.040, // graduated to 5.75%; $35k retirement exclusion per person (65+)
-  AR: 0.039, // 3.9% flat (2024); some retirement exemptions
-  MO: 0.040, // graduated to 4.95%; broad SS/pension exemptions
-  SC: 0.040, // graduated to 6.4%; large senior deductions
-  DE: 0.046, // graduated to 6.6%; $12.5k pension exclusion
-  NJ: 0.020, // graduated to 10.75%; $100k pension exclusion for couples
-  MI: 0.042, // 4.25%; phasing in retirement exemptions
-  NC: 0.045, // 4.5% flat; SS exempt
-  OK: 0.040, // graduated to 4.75%; $10k pension exemption
-  MA: 0.050, // 5% flat; SS and some pension exempt
-  MD: 0.048, // graduated to 5.75%; SS exempt; $34.5k pension exclusion
-  UT: 0.047, // 4.65% flat; retirement credit for lower incomes
-  ME: 0.055, // graduated to 7.15%; $35k pension/SS exclusion
-  NM: 0.049, // graduated to 5.9%
-  KS: 0.049, // graduated to 5.7%; SS exempt at lower incomes
-  NE: 0.053, // graduated to 5.84%; SS phasing toward full exemption
-  VA: 0.050, // graduated to 5.75%; SS exempt; $12k age deduction
-  WV: 0.050, // graduated to 6.5%; SS exempt
-  ID: 0.058, // 5.8% flat
-  MT: 0.059, // 5.9% flat (2024); some retirement deductions
-  RI: 0.049, // graduated to 5.99%; some retirement exemptions
-  NY: 0.060, // graduated to 10.9%; $20k pension exclusion; SS exempt
-  CT: 0.055, // graduated to 6.99%; SS exempt for incomes under threshold
-  WI: 0.065, // graduated to 7.65%
-  VT: 0.070, // graduated to 8.75%; partial SS exemption
-  MN: 0.070, // graduated to 9.85%; partial SS exemption
-  HI: 0.070, // graduated to 11%; small pension exclusion
-  OR: 0.090, // graduated to 9.9%; SS exempt; federal pension credit
-  CA: 0.093, // graduated to 13.3%; SS exempt
-  DC: 0.085, // graduated to 10.75%; SS exempt
+  // All other states — rate is approximate effective rate for a retiree
+  // (after typical senior deductions; SS usually excluded where noted)
+  AZ: { rate: 0.025, retirementExempt: false }, // 2.5% flat (2023+)
+  IN: { rate: 0.030, retirementExempt: false }, // 3.05% flat
+  AL: { rate: 0.030, retirementExempt: false }, // SS + most pensions exempt; ~3% on IRA
+  LA: { rate: 0.030, retirementExempt: false }, // ~3% effective after flat rate reform
+  ND: { rate: 0.020, retirementExempt: false }, // 2.5% flat; SS largely exempt
+  OH: { rate: 0.030, retirementExempt: false }, // graduated to 3.5%; senior credits
+  CO: { rate: 0.035, retirementExempt: false }, // 4.4% flat; $24k pension/IRA senior deduction
+  KY: { rate: 0.040, retirementExempt: false }, // 4% flat; $31k pension exemption
+  GA: { rate: 0.040, retirementExempt: false }, // graduated to 5.75%; $35k retirement exclusion (65+)
+  AR: { rate: 0.039, retirementExempt: false }, // 3.9% flat (2024); some retirement exemptions
+  MO: { rate: 0.040, retirementExempt: false }, // graduated to 4.95%; broad SS/pension exemptions
+  SC: { rate: 0.040, retirementExempt: false }, // graduated to 6.4%; large senior deductions
+  DE: { rate: 0.046, retirementExempt: false }, // graduated to 6.6%; $12.5k pension exclusion
+  NJ: { rate: 0.020, retirementExempt: false }, // graduated to 10.75%; $100k pension exclusion for couples
+  MI: { rate: 0.042, retirementExempt: false }, // 4.25%; phasing in retirement exemptions
+  NC: { rate: 0.045, retirementExempt: false }, // 4.5% flat; SS exempt
+  OK: { rate: 0.040, retirementExempt: false }, // graduated to 4.75%; $10k pension exemption
+  MA: { rate: 0.050, retirementExempt: false }, // 5% flat; SS and some pension exempt
+  MD: { rate: 0.048, retirementExempt: false }, // graduated to 5.75%; SS exempt; $34.5k pension exclusion
+  UT: { rate: 0.047, retirementExempt: false }, // 4.65% flat; retirement credit for lower incomes
+  ME: { rate: 0.055, retirementExempt: false }, // graduated to 7.15%; $35k pension/SS exclusion
+  NM: { rate: 0.049, retirementExempt: false }, // graduated to 5.9%
+  KS: { rate: 0.049, retirementExempt: false }, // graduated to 5.7%; SS exempt at lower incomes
+  NE: { rate: 0.053, retirementExempt: false }, // graduated to 5.84%; SS phasing toward full exemption
+  VA: { rate: 0.050, retirementExempt: false }, // graduated to 5.75%; SS exempt; $12k age deduction
+  WV: { rate: 0.050, retirementExempt: false }, // graduated to 6.5%; SS exempt
+  ID: { rate: 0.058, retirementExempt: false }, // 5.8% flat
+  MT: { rate: 0.059, retirementExempt: false }, // 5.9% flat (2024); some retirement deductions
+  RI: { rate: 0.049, retirementExempt: false }, // graduated to 5.99%; some retirement exemptions
+  NY: { rate: 0.060, retirementExempt: false }, // graduated to 10.9%; $20k pension exclusion; SS exempt
+  CT: { rate: 0.055, retirementExempt: false }, // graduated to 6.99%; SS exempt under threshold
+  WI: { rate: 0.065, retirementExempt: false }, // graduated to 7.65%
+  VT: { rate: 0.070, retirementExempt: false }, // graduated to 8.75%; partial SS exemption
+  MN: { rate: 0.070, retirementExempt: false }, // graduated to 9.85%; partial SS exemption
+  HI: { rate: 0.070, retirementExempt: false }, // graduated to 11%; small pension exclusion
+  OR: { rate: 0.090, retirementExempt: false }, // graduated to 9.9%; SS exempt; federal pension credit
+  CA: { rate: 0.093, retirementExempt: false }, // graduated to 13.3%; SS exempt
+  DC: { rate: 0.085, retirementExempt: false }, // graduated to 10.75%; SS exempt
 }
 
 /** Returns the estimated effective state income tax rate (0–1) for a given zip code.
- *  Rates are approximate after typical senior exemptions. Returns 0 for unknown zips. */
+ *  For states with retirement income exemptions, returns the statutory rate
+ *  (caller should also check retirementExempt via getStateInfo). */
 export function getStateTaxRate(zipCode: string): number {
   const state = zipToState(zipCode)
   if (!state) return 0
-  return STATE_RATES[state] ?? 0
+  return STATE_DATA[state]?.rate ?? 0
 }
 
-/** Returns the state code and display info for a zip code. */
-export function getStateInfo(zipCode: string): { code: string; name: string; rate: number } | null {
+/** Returns state code, display name, tax rate, and whether retirement income
+ *  (SS benefits + IRA/401k/pension distributions) is exempt from state tax. */
+export function getStateInfo(zipCode: string): { code: string; name: string; rate: number; retirementExempt: boolean } | null {
   const code = zipToState(zipCode)
   if (!code) return null
-  const rate = STATE_RATES[code] ?? 0
-  return { code, name: getStateName(code), rate }
+  const data = STATE_DATA[code]
+  if (!data) return null
+  return { code, name: getStateName(code), rate: data.rate, retirementExempt: data.retirementExempt }
 }

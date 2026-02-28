@@ -39,7 +39,7 @@ interface BrokerageAccountInfo {
   balance: number | null
 }
 
-interface StateInfo { code: string; name: string; rate: number }
+interface StateInfo { code: string; name: string; rate: number; retirementExempt: boolean }
 
 interface Props {
   initialScenario: typeof taxScenarios.$inferSelect | null
@@ -249,6 +249,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       spouseSsPaymentsPerYear: numVal(form.spouseSsPaymentsPerYear),
       spouseSex,
       stateTaxRate: stateInfo?.rate ?? 0,
+      stateExemptRetirement: stateInfo?.retirementExempt ?? false,
       planToAge: numVal(form.planToAge),
       spousePlanToAge: numVal(form.spousePlanToAge),
       annualDeferredContrib: 0,

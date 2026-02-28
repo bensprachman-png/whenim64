@@ -212,6 +212,7 @@ export default async function DashboardPage() {
       spouseSsPaymentsPerYear: scenario.spouseSsPaymentsPerYear ?? 0,
       spouseSex,
       stateTaxRate: stateInfo?.rate ?? 0,
+      stateExemptRetirement: stateInfo?.retirementExempt ?? false,
       planToAge,
       spousePlanToAge,
       annualDeferredContrib: scenario.annualDeferredContrib ?? 0,

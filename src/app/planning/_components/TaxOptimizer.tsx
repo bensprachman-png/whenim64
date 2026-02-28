@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/accordion'
 import { projectTaxes, computeProjectionYears, ssaExpectedAge, type ScenarioRow, type IrmaaTargetTier, type Sex, type TaxInputs } from '@/lib/tax-engine'
 import type { FilingStatus } from '@/lib/tax-engine'
+import { getRmdAge } from '@/lib/milestones'
 import type { taxScenarios } from '@/db/schema'
 
 interface BrokerageAccountInfo {
@@ -39,7 +40,7 @@ interface BrokerageAccountInfo {
   balance: number | null
 }
 
-interface StateInfo { code: string; name: string; rate: number }
+interface StateInfo { code: string; name: string; rate: number; retirementExempt: boolean }
 
 interface Props {
   initialScenario: typeof taxScenarios.$inferSelect | null
@@ -343,7 +344,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
   // Expensive projection — memoised on inputs only (not on showConversions)
   const { baselineRows, optimizedRows, summary, projectionYears } = useMemo(() => {
     const ssStart = numVal(form.ssStartYear)
-    const rmdStart = (birthYear ?? 0) > 0 ? (birthYear! + 73) : 9999
+    const rmdStart = (birthYear ?? 0) > 0 ? (birthYear! + getRmdAge(birthYear!)) : 9999
     const convStop =
       conversionWindow === 'before-ss'  ? (ssStart || 9999) :
       conversionWindow === 'before-rmd' ? rmdStart :
@@ -388,6 +389,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       spouseSsPaymentsPerYear: computedSpouseSsAnnual ?? numVal(form.spouseSsPaymentsPerYear),
       spouseSex,
       stateTaxRate: stateInfo?.rate ?? 0,
+      stateExemptRetirement: stateInfo?.retirementExempt ?? false,
       planToAge: numVal(form.planToAge),
       spousePlanToAge: numVal(form.spousePlanToAge),
       annualDeferredContrib: numVal(form.annualDeferredContrib),
@@ -403,7 +405,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
   // Scenario comparison — all 4 aggressiveness tiers with their own comparisonWindow
   const scenarioComparison = useMemo(() => {
     const ssStart = numVal(form.ssStartYear)
-    const rmdStart = (birthYear ?? 0) > 0 ? (birthYear! + 73) : 9999
+    const rmdStart = (birthYear ?? 0) > 0 ? (birthYear! + getRmdAge(birthYear!)) : 9999
     const convStop =
       comparisonWindow === 'before-ss'  ? (ssStart || 9999) :
       comparisonWindow === 'before-rmd' ? rmdStart :
@@ -429,7 +431,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
       spouseBirthYear: effectiveSpouseBirthYear ?? 0,
       spouseSsStartYear: numVal(form.spouseSsStartYear),
       spouseSsPaymentsPerYear: computedSpouseSsAnnual ?? numVal(form.spouseSsPaymentsPerYear),
-      spouseSex, stateTaxRate: stateInfo?.rate ?? 0,
+      spouseSex, stateTaxRate: stateInfo?.rate ?? 0, stateExemptRetirement: stateInfo?.retirementExempt ?? false,
       planToAge: numVal(form.planToAge), spousePlanToAge: numVal(form.spousePlanToAge),
       annualDeferredContrib: numVal(form.annualDeferredContrib),
       annualRothContrib: numVal(form.annualRothContrib),
@@ -993,7 +995,7 @@ export default function TaxOptimizer({ initialScenario, birthYear, defaultFiling
           <span>State tax estimate:</span>
           <span className="font-medium text-foreground">{stateInfo.name}</span>
           <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{stateInfo.code}</span>
-          <span>{stateInfo.rate === 0 ? 'no state income tax' : `~${(stateInfo.rate * 100).toFixed(1)}% effective rate on retirement income`}</span>
+          <span>{stateInfo.rate === 0 ? 'no state income tax' : stateInfo.retirementExempt ? `${(stateInfo.rate * 100).toFixed(2).replace(/\.?0+$/, '')}% on W2 & investment income (SS/IRA distributions exempt)` : `~${(stateInfo.rate * 100).toFixed(1)}% effective rate on retirement income`}</span>
           <a href="/account" className="ml-auto text-xs text-primary underline hover:no-underline shrink-0">Update zip →</a>
         </div>
       ) : (
