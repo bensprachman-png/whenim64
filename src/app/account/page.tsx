@@ -92,8 +92,11 @@ export default function AccountPage() {
         dateOfBirth: '', zipCode: '', filingStatus: '', sex: '', spouseDateOfBirth: '', spouseSex: '',
       }, { keepDirtyValues: true })
     }
-    // Always validate on load so missing required fields are highlighted immediately
-    setTimeout(() => form.trigger(), 0)
+    // Validate on load for existing users so missing required fields are highlighted immediately
+    // (New users go through the wizard which uses disabled-button UX instead)
+    if (profile?.id) {
+      setTimeout(() => form.trigger(), 0)
+    }
     setLoading(false)
   }
 

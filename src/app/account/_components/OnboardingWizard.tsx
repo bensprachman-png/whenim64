@@ -67,6 +67,10 @@ export default function OnboardingWizard({ form, onSubmit, saveError }: Props) {
   })
 
   const filingStatus = form.watch('filingStatus')
+  const dateOfBirth = form.watch('dateOfBirth')
+  const zipCode = form.watch('zipCode')
+  const sex = form.watch('sex')
+  const step2Complete = !!(dateOfBirth && zipCode && sex)
 
   // ── Step 1: Welcome & Tour ────────────────────────────────────────────────
   if (step === 1) {
@@ -167,7 +171,7 @@ export default function OnboardingWizard({ form, onSubmit, saveError }: Props) {
                   <FormLabel>Zip Code</FormLabel>
                   <FormControl><Input maxLength={10} placeholder="12345" {...field} /></FormControl>
                   <p className="text-xs text-muted-foreground">
-                    Used to estimate state income taxes in your retirement income projections.
+                    Used to estimate state income taxes in your retirement income projections and to identify Medicare Supplement (Medigap) plans available in your region.
                   </p>
                   <FormMessage />
                 </FormItem>
@@ -196,7 +200,7 @@ export default function OnboardingWizard({ form, onSubmit, saveError }: Props) {
                 <Button type="button" variant="outline" onClick={() => setStep(1)} className="gap-1">
                   <ChevronLeft className="size-4" /> Back
                 </Button>
-                <Button type="button" onClick={handleNextStep} className="gap-2">
+                <Button type="button" onClick={handleNextStep} disabled={!step2Complete} className="gap-2">
                   Next <ArrowRight className="size-4" />
                 </Button>
               </div>
