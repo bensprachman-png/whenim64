@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   },
 }
 import MilestoneTimeline from '@/components/milestone-timeline'
+import DashboardActions from './_components/DashboardActions'
 import { getFullRetirementAge, fraToString, getRmdAge } from '@/lib/milestones'
 import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
@@ -277,6 +278,25 @@ export default async function DashboardPage() {
 
       {/* Milestone Timeline — highlighted to current age */}
       <MilestoneTimeline dateOfBirth={dob} planEndsYear={planEndsYear} planToAge={planToAge || null} />
+
+      {/* Action Items — time-sensitive tasks based on milestones and calendar */}
+      <DashboardActions
+        dateOfBirth={dob}
+        spouseDateOfBirth={spouseDob}
+        ssStartYear={scenario?.ssStartYear ?? null}
+        spouseSsStartYear={scenario?.spouseSsStartYear ?? null}
+        retirementYear={scenario?.retirementYear ?? null}
+        enrolledPartA={enrolledPartA}
+        enrolledPartB={enrolledPartB}
+        spouseEnrolledPartA={spouseEnrolledPartA}
+        spouseEnrolledPartB={spouseEnrolledPartB}
+        hasSupplement={!!medicarePlanType}
+        spouseHasSupplement={!!spouseMedicarePlanType}
+        quarterlyTaxTotal={quarterlyTotal}
+        stateCode={stateInfo?.code ?? null}
+        statePayUrl={statePayUrl}
+        hasScenario={hasScenario}
+      />
 
       {/* Section grid */}
       <div className="grid gap-6 md:grid-cols-2">
