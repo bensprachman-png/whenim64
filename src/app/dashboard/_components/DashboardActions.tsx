@@ -441,10 +441,20 @@ export default function DashboardActions(props: DashboardActionsProps) {
     const onDemoChange = () => {
       const active = localStorage.getItem(DEMO_KEY) === 'true'
       setDemoMode(active)
-      if (active) setShowTest(false)
     }
-    window.addEventListener('wi64-demo-change', onDemoChange)
-    return () => window.removeEventListener('wi64-demo-change', onDemoChange)
+    const onTestToggle = () => {
+      setShowTest(prev => {
+        const next = !prev
+        window.dispatchEvent(new CustomEvent('wi64-test-panel-state', { detail: next }))
+        return next
+      })
+    }
+    window.addEventListener('wi64-demo-change',      onDemoChange)
+    window.addEventListener('wi64-test-panel-toggle', onTestToggle)
+    return () => {
+      window.removeEventListener('wi64-demo-change',      onDemoChange)
+      window.removeEventListener('wi64-test-panel-toggle', onTestToggle)
+    }
   }, [])
 
   const actions = useMemo(() => generateActions(props, new Date(), testForces), [props, testForces])
@@ -515,20 +525,6 @@ export default function DashboardActions(props: DashboardActionsProps) {
             <span className="ml-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold size-5">
               {realPendingCount}
             </span>
-          )}
-          {canTest && !demoMode && (
-            <button
-              onClick={() => setShowTest(v => !v)}
-              title="Developer: force test actions"
-              className={`ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${
-                testForces.size > 0 || demoMode
-                  ? 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
-                  : 'border-dashed border-muted-foreground/40 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <FlaskConical className="size-3" />
-              {demoMode ? 'Demo' : testForces.size > 0 ? `${testForces.size} forced` : 'Test'}
-            </button>
           )}
         </CardTitle>
       </CardHeader>

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
-import { CircleHelp, BookOpen, Settings, LogOut, Shield, Camera } from 'lucide-react'
+import { CircleHelp, BookOpen, Settings, LogOut, Shield, Camera, FlaskConical } from 'lucide-react'
 import HelpDialog from './help-dialog'
 import GlossaryDialog from './glossary-dialog'
 
@@ -29,13 +29,19 @@ export default function Navbar() {
   const { data: session } = useSession()
   const [helpOpen, setHelpOpen] = useState(false)
   const [glossaryOpen, setGlossaryOpen] = useState(false)
-  const [demoActive, setDemoActive] = useState(false)
+  const [demoActive,     setDemoActive]     = useState(false)
+  const [testPanelOpen,  setTestPanelOpen]  = useState(false)
 
   useEffect(() => {
     setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
-    const onDemoChange = () => setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
-    window.addEventListener('wi64-demo-change', onDemoChange)
-    return () => window.removeEventListener('wi64-demo-change', onDemoChange)
+    const onDemoChange  = () => setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
+    const onTestState   = (e: Event) => setTestPanelOpen((e as CustomEvent<boolean>).detail)
+    window.addEventListener('wi64-demo-change',    onDemoChange)
+    window.addEventListener('wi64-test-panel-state', onTestState)
+    return () => {
+      window.removeEventListener('wi64-demo-change',    onDemoChange)
+      window.removeEventListener('wi64-test-panel-state', onTestState)
+    }
   }, [])
 
   const toggleDemo = () => {
@@ -45,6 +51,8 @@ export default function Navbar() {
     setDemoActive(next)
     window.dispatchEvent(new Event('wi64-demo-change'))
   }
+
+  const toggleTestPanel = () => window.dispatchEvent(new Event('wi64-test-panel-toggle'))
 
   async function handleSignOut() {
     await signOut()
@@ -110,6 +118,17 @@ export default function Navbar() {
                 <Link href="/admin" title="Admin" className={iconLinkClass('/admin')}>
                   <Shield className="size-[18px]" />
                 </Link>
+                <button
+                  onClick={toggleTestPanel}
+                  title={testPanelOpen ? 'Hide test panel' : 'Show test panel'}
+                  className={`rounded-md p-2 transition-colors ${
+                    testPanelOpen
+                      ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-950/60'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  <FlaskConical className="size-[18px]" />
+                </button>
                 <button
                   onClick={toggleDemo}
                   title={demoActive ? 'Demo mode on — click to clear' : 'Activate demo snapshot'}
