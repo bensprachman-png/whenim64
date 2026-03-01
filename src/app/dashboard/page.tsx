@@ -22,7 +22,7 @@ import MilestoneTimeline from '@/components/milestone-timeline'
 import DashboardActions from './_components/DashboardActions'
 import { SUPERUSER_EMAIL } from '@/lib/admin'
 import { getFullRetirementAge, fraToString, getRmdAge } from '@/lib/milestones'
-import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
+import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus, type ScenarioRow } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
 
 export const dynamic = 'force-dynamic'
@@ -114,6 +114,61 @@ const pdpTierLabels: Record<string, string> = {
   high: 'High-Premium PDP',
 }
 
+// ─── Plan funding simulation ───────────────────────────────────────────────
+// Mirrors the cash-flow simulation in planning/TaxOptimizer.tsx.
+// Returns 100 when the plan never fails, or the % of retirement years
+// that are funded (0–99) when assets are depleted before end of life.
+// Returns null when required inputs are missing.
+type ScenarioSnap = {
+  portfolioGrowthPct: number; inflationPct: number; retirementYear: number | null
+  annualDeferredContrib: number; annualRothContrib: number
+  employerMatchPct: number | null; w2Income: number
+  spouseAnnualDeferredContrib: number; spouseAnnualRothContrib: number
+  spouseEmployerMatchPct: number | null
+  iraBalance: number; rothBalance: number; taxableBalance: number
+}
+
+function computePlanFundingPct(s: ScenarioSnap, rows: ScenarioRow[], expenses: number, startYear: number): number | null {
+  if (expenses <= 0 || rows.length === 0) return null
+  const growthRate = (s.portfolioGrowthPct ?? 5) / 100
+  const inflation  = (s.inflationPct ?? 2.5) / 100
+  const retYear    = s.retirementYear ?? startYear
+  const annualIraContribs  = (s.annualDeferredContrib ?? 0) + ((s.w2Income ?? 0) * (s.employerMatchPct ?? 0) / 100)
+    + (s.spouseAnnualDeferredContrib ?? 0) + ((s.w2Income ?? 0) * (s.spouseEmployerMatchPct ?? 0) / 100)
+  const annualRothContribs = (s.annualRothContrib ?? 0) + (s.spouseAnnualRothContrib ?? 0)
+  let taxable = s.taxableBalance ?? 0
+  let ira     = s.iraBalance ?? 0
+  let roth    = s.rothBalance ?? 0
+  let firstShortfallYear: number | null = null
+  for (const row of rows) {
+    const yearsElapsed = row.year - startYear
+    const exp = expenses * Math.pow(1 + inflation, yearsElapsed)
+    const atr = Math.max(0, 1 - row.effectiveRatePct / 100)
+    const isPreRet = row.year < retYear
+    if (isPreRet) { ira += annualIraContribs; roth += annualRothContribs }
+    ira = ira * (1 + growthRate)
+    roth = roth * (1 + growthRate)
+    const rmdOut  = Math.min(row.rmd, ira)
+    const convOut = Math.min(row.rothConversion, Math.max(0, ira - rmdOut))
+    ira = Math.max(0, ira - rmdOut - convOut)
+    roth += convOut
+    taxable = taxable * (1 + growthRate)
+    const taxableRmd = !isPreRet && row.rmd > 0 ? rmdOut * (row.iraWithdrawal / row.rmd) : 0
+    const ati  = isPreRet ? row.w2 * atr : taxableRmd * atr + row.ss * atr
+    const net  = isPreRet ? ati - annualRothContribs - exp : ati - exp
+    taxable += net
+    if (taxable < 0 && ira > 0 && atr > 0) { const d = Math.min(-taxable / atr, ira); ira = Math.max(0, ira - d); taxable += d * atr }
+    if (taxable < 0 && roth > 0)             { const d = Math.min(-taxable, roth);      roth = Math.max(0, roth - d); taxable += d }
+    if (taxable < 0 && firstShortfallYear === null) firstShortfallYear = row.year
+    taxable = Math.max(0, taxable)
+  }
+  if (firstShortfallYear === null) return 100
+  const retirementRows = rows.filter(r => r.year >= retYear)
+  if (retirementRows.length === 0) return 100
+  const yearsBeforeShortfall = Math.max(0, firstShortfallYear - retYear)
+  return Math.max(0, Math.min(99, Math.round((yearsBeforeShortfall / retirementRows.length) * 100)))
+}
+
 function NoPlan({ page, label }: { page: string; label: string }) {
   return (
     <div className="rounded-md border border-dashed border-muted-foreground/30 px-4 py-3 flex items-center justify-between gap-4">
@@ -174,6 +229,8 @@ export default async function DashboardPage() {
   let quarterlyFederal = 0, quarterlyState = 0, quarterlyTotal = 0
   let annualFederal = 0, annualState = 0, annualTotal = 0, estimatedMagi = 0
   let annualConversionAmount = 0, annualConversionTax = 0
+  let planFundingPct: number | null = null
+  const annualLivingExpenses = scenario?.annualLivingExpenses ?? 0
 
   if (scenario && birthYear) {
     const filing: FilingStatus = profile?.filingStatus === 'married_jointly' ? 'joint' : 'single'
@@ -241,6 +298,15 @@ export default async function DashboardPage() {
       quarterlyState = annualState / 4
       quarterlyTotal = annualTotal / 4
     }
+
+    // Full projection for funding analysis
+    if (annualLivingExpenses > 0) {
+      const fullProjYears = computeProjectionYears(birthYear, spouseBirthYear, currentYear, sex, spouseSex, planToAge, spousePlanToAge)
+      if (fullProjYears > 0) {
+        const { optimizedRows: fullRows } = projectTaxes({ ...taxInputs, projectionYears: fullProjYears })
+        planFundingPct = computePlanFundingPct(scenario, fullRows, annualLivingExpenses, currentYear)
+      }
+    }
   }
 
   // Due dates for the current tax year (Q4 falls in Jan of the following year)
@@ -294,10 +360,13 @@ export default async function DashboardPage() {
         spouseEnrolledPartB={spouseEnrolledPartB}
         hasSupplement={!!medicarePlanType}
         spouseHasSupplement={!!spouseMedicarePlanType}
-        quarterlyTaxTotal={quarterlyTotal}
+        quarterlyFedTaxTotal={quarterlyFederal}
+        quarterlyStateTaxTotal={quarterlyState}
         stateCode={stateInfo?.code ?? null}
         statePayUrl={statePayUrl}
         hasScenario={hasScenario}
+        planFundingPct={planFundingPct}
+        annualLivingExpenses={annualLivingExpenses}
         canTest={canTest}
       />
 
