@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
-import { CircleHelp, BookOpen, Settings, LogOut, Shield } from 'lucide-react'
+import { CircleHelp, BookOpen, Settings, LogOut, Shield, Camera } from 'lucide-react'
 import HelpDialog from './help-dialog'
 import GlossaryDialog from './glossary-dialog'
+
+const DEMO_KEY = 'wi64-demo-mode'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -27,6 +29,22 @@ export default function Navbar() {
   const { data: session } = useSession()
   const [helpOpen, setHelpOpen] = useState(false)
   const [glossaryOpen, setGlossaryOpen] = useState(false)
+  const [demoActive, setDemoActive] = useState(false)
+
+  useEffect(() => {
+    setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
+    const onDemoChange = () => setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
+    window.addEventListener('wi64-demo-change', onDemoChange)
+    return () => window.removeEventListener('wi64-demo-change', onDemoChange)
+  }, [])
+
+  const toggleDemo = () => {
+    const next = !demoActive
+    if (next) localStorage.setItem(DEMO_KEY, 'true')
+    else localStorage.removeItem(DEMO_KEY)
+    setDemoActive(next)
+    window.dispatchEvent(new Event('wi64-demo-change'))
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -88,11 +106,22 @@ export default function Navbar() {
                 </Link>
               ))}
               {((session.user as { role?: string }).role === 'admin' ||
-                (session.user as { role?: string }).role === 'superuser') && (
+                (session.user as { role?: string }).role === 'superuser') && (<>
                 <Link href="/admin" title="Admin" className={iconLinkClass('/admin')}>
                   <Shield className="size-[18px]" />
                 </Link>
-              )}
+                <button
+                  onClick={toggleDemo}
+                  title={demoActive ? 'Demo mode on — click to clear' : 'Activate demo snapshot'}
+                  className={`rounded-md p-2 transition-colors ${
+                    demoActive
+                      ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-950/60'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  <Camera className="size-[18px]" />
+                </button>
+              </>)}
               <span className="text-sm text-muted-foreground hidden sm:inline mx-2">
                 {session.user.name}
               </span>

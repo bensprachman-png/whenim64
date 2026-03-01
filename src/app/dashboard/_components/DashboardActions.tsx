@@ -437,6 +437,10 @@ export default function DashboardActions(props: DashboardActionsProps) {
       if (d === 'true') setDemoMode(true)
     } catch {}
     setMounted(true)
+
+    const onDemoChange = () => setDemoMode(localStorage.getItem(DEMO_KEY) === 'true')
+    window.addEventListener('wi64-demo-change', onDemoChange)
+    return () => window.removeEventListener('wi64-demo-change', onDemoChange)
   }, [])
 
   const actions = useMemo(() => generateActions(props, new Date(), testForces), [props, testForces])
@@ -464,12 +468,18 @@ export default function DashboardActions(props: DashboardActionsProps) {
   const activateDemo = () => {
     setDemoMode(true)
     setShowTest(false)
-    try { localStorage.setItem(DEMO_KEY, 'true') } catch {}
+    try {
+      localStorage.setItem(DEMO_KEY, 'true')
+      window.dispatchEvent(new Event('wi64-demo-change'))
+    } catch {}
   }
 
   const clearDemo = () => {
     setDemoMode(false)
-    try { localStorage.removeItem(DEMO_KEY) } catch {}
+    try {
+      localStorage.removeItem(DEMO_KEY)
+      window.dispatchEvent(new Event('wi64-demo-change'))
+    } catch {}
   }
 
   // In demo mode, show hardcoded actions and override funding pct to 103%
