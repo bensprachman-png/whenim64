@@ -512,12 +512,7 @@ export default function DashboardActions(props: DashboardActionsProps) {
               {realPendingCount}
             </span>
           )}
-          {demoMode && (
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-600 rounded px-1.5 py-0.5 leading-none">
-              DEMO
-            </span>
-          )}
-          {canTest && (
+          {canTest && !demoMode && (
             <button
               onClick={() => setShowTest(v => !v)}
               title="Developer: force test actions"
