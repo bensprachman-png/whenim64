@@ -362,10 +362,59 @@ const TEST_TOGGLES: TestToggle[] = [
   { key: 'quarterly-review',     label: 'Quarterly Plan Review' },
 ]
 
+// ─── Demo snapshot ────────────────────────────────────────────────────────────
+
+function generateDemoActions(today: Date): Action[] {
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+
+  const dueAB = new Date(today)
+  dueAB.setDate(dueAB.getDate() + 42) // ~6 weeks from today
+
+  const dueSupp = new Date(today)
+  dueSupp.setMonth(dueSupp.getMonth() + 5)
+
+  const ssYear = today.getFullYear() + 1
+  const ssJan  = new Date(ssYear, 0, 1)
+
+  return [
+    {
+      id: 'demo-medicare-ab',
+      category: 'medicare',
+      title: 'Apply for Medicare Part A & B',
+      description: 'Your Initial Enrollment Period is open. Apply at ssa.gov, call 1-800-772-1213, or visit your local Social Security office. Enrolling late can result in permanent premium penalties.',
+      dueLabel: `Before ${fmtDate(dueAB)}`,
+      urgency: 'medium',
+      link: 'https://www.ssa.gov/medicare/sign-up',
+    },
+    {
+      id: 'demo-medicare-supp',
+      category: 'medicare',
+      title: 'Choose Medicare Advantage or Medigap coverage',
+      description:
+        'You have two paths: (1) Medicare Advantage (Part C) — an all-in-one plan from a private insurer that bundles Parts A, B, and usually D; or (2) Original Medicare with a Medigap supplement (Plan G is most comprehensive) plus a separate Part D drug plan. ' +
+        'This is your guaranteed-issue window — Medigap plans cannot deny coverage based on health history.',
+      dueLabel: `Window closes ${fmtDate(dueSupp)}`,
+      urgency: 'low',
+      link: 'https://www.medicare.gov/find-a-plan/questions/home.aspx',
+    },
+    {
+      id: 'demo-ss-apply',
+      category: 'ss',
+      title: 'Begin Social Security application',
+      description: `You've planned to start SS benefits in ${ssYear}. SSA recommends applying 4 months in advance — benefits cannot start retroactively in most cases. Apply at ssa.gov or call 1-800-772-1213.`,
+      dueLabel: `Apply by ${fmtDate(ssJan)}`,
+      urgency: 'medium',
+      link: 'https://www.ssa.gov/benefits/retirement/apply.html',
+    },
+  ]
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CHECKS_KEY = 'wi64-action-checks'
 const FORCES_KEY = 'wi64-test-forces'
+const DEMO_KEY   = 'wi64-demo-mode'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -374,6 +423,7 @@ export default function DashboardActions(props: DashboardActionsProps) {
 
   const [checked,    setChecked]    = useState<Record<string, boolean>>({})
   const [testForces, setTestForces] = useState<Set<string>>(new Set())
+  const [demoMode,   setDemoMode]   = useState(false)
   const [showTest,   setShowTest]   = useState(false)
   const [mounted,    setMounted]    = useState(false)
 
@@ -381,8 +431,10 @@ export default function DashboardActions(props: DashboardActionsProps) {
     try {
       const c = localStorage.getItem(CHECKS_KEY)
       const f = localStorage.getItem(FORCES_KEY)
+      const d = localStorage.getItem(DEMO_KEY)
       if (c) setChecked(JSON.parse(c))
       if (f) setTestForces(new Set(JSON.parse(f)))
+      if (d === 'true') setDemoMode(true)
     } catch {}
     setMounted(true)
   }, [])
@@ -390,19 +442,6 @@ export default function DashboardActions(props: DashboardActionsProps) {
   const actions = useMemo(() => generateActions(props, new Date(), testForces), [props, testForces])
 
   if (!mounted) return null
-
-  const hasFundingStatus = hasScenario && (planFundingPct !== null || annualLivingExpenses === 0)
-  if (actions.length === 0 && !hasFundingStatus && !canTest) return null
-
-  const pending = actions.filter(a => !checked[a.id])
-  const done    = actions.filter(a =>  checked[a.id])
-  const sorted  = [...pending].sort((a, b) => {
-    if (a.forced !== b.forced) return a.forced ? 1 : -1
-    const order = { high: 0, medium: 1, low: 2 }
-    return order[a.urgency] - order[b.urgency]
-  })
-
-  const realPendingCount = pending.filter(a => !a.forced && a.id !== 'setup-expenses').length
 
   const toggle = (id: string) => {
     const next = { ...checked, [id]: !checked[id] }
@@ -422,6 +461,36 @@ export default function DashboardActions(props: DashboardActionsProps) {
     try { localStorage.removeItem(FORCES_KEY) } catch {}
   }
 
+  const activateDemo = () => {
+    setDemoMode(true)
+    setShowTest(false)
+    try { localStorage.setItem(DEMO_KEY, 'true') } catch {}
+  }
+
+  const clearDemo = () => {
+    setDemoMode(false)
+    try { localStorage.removeItem(DEMO_KEY) } catch {}
+  }
+
+  // In demo mode, show hardcoded actions and override funding pct to 103%
+  const displayActions     = demoMode ? generateDemoActions(new Date()) : actions
+  const displayFundingPct  = demoMode ? 103 : planFundingPct
+  const displayHasExpenses = demoMode || annualLivingExpenses > 0
+  const displayHasScenario = demoMode || hasScenario
+
+  const hasFundingStatus = displayHasScenario && (displayFundingPct !== null || (!demoMode && annualLivingExpenses === 0))
+  if (displayActions.length === 0 && !hasFundingStatus && !canTest) return null
+
+  const pending = displayActions.filter(a => !checked[a.id])
+  const done    = displayActions.filter(a =>  checked[a.id])
+  const sorted  = [...pending].sort((a, b) => {
+    if (a.forced !== b.forced) return a.forced ? 1 : -1
+    const order = { high: 0, medium: 1, low: 2 }
+    return order[a.urgency] - order[b.urgency]
+  })
+
+  const realPendingCount = pending.filter(a => !a.forced && a.id !== 'setup-expenses').length
+
   return (
     <Card className="border-primary/20">
       <CardHeader className="pb-3">
@@ -433,18 +502,23 @@ export default function DashboardActions(props: DashboardActionsProps) {
               {realPendingCount}
             </span>
           )}
+          {demoMode && (
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-600 rounded px-1.5 py-0.5 leading-none">
+              DEMO
+            </span>
+          )}
           {canTest && (
             <button
               onClick={() => setShowTest(v => !v)}
               title="Developer: force test actions"
               className={`ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${
-                testForces.size > 0
+                testForces.size > 0 || demoMode
                   ? 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
                   : 'border-dashed border-muted-foreground/40 text-muted-foreground hover:text-foreground'
               }`}
             >
               <FlaskConical className="size-3" />
-              {testForces.size > 0 ? `${testForces.size} forced` : 'Test'}
+              {demoMode ? 'Demo' : testForces.size > 0 ? `${testForces.size} forced` : 'Test'}
             </button>
           )}
         </CardTitle>
@@ -454,13 +528,13 @@ export default function DashboardActions(props: DashboardActionsProps) {
 
         {/* Plan funding status banner — always at top */}
         <PlanFundingStatus
-          pct={planFundingPct}
-          hasExpenses={annualLivingExpenses > 0}
-          hasScenario={hasScenario}
+          pct={displayFundingPct}
+          hasExpenses={displayHasExpenses}
+          hasScenario={displayHasScenario}
         />
 
         {/* No natural actions */}
-        {actions.length === 0 && hasFundingStatus && (
+        {displayActions.length === 0 && hasFundingStatus && (
           <p className="text-sm text-muted-foreground">
             No time-sensitive actions right now — check back closer to key dates.
           </p>
@@ -495,6 +569,27 @@ export default function DashboardActions(props: DashboardActionsProps) {
         {/* Developer test panel */}
         {canTest && showTest && (
           <div className="mt-3 border-t border-dashed border-amber-300 dark:border-amber-700 pt-3 space-y-3">
+
+            {/* Demo Snapshot */}
+            <div className="rounded-md border border-dashed border-amber-400 dark:border-amber-600 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  📸 Demo Snapshot
+                </span>
+                {demoMode
+                  ? <button onClick={clearDemo} className="text-xs text-rose-600 dark:text-rose-400 hover:underline font-medium shrink-0">
+                      Clear demo
+                    </button>
+                  : <button onClick={activateDemo} className="text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium shrink-0">
+                      Activate
+                    </button>
+                }
+              </div>
+              <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1 leading-snug">
+                Shows a hardcoded realistic view: plan funded at 103% (green), Medicare enrollment window, and SS application — for screenshots and demo pages.
+              </p>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
                 <FlaskConical className="size-3.5" />
