@@ -438,7 +438,11 @@ export default function DashboardActions(props: DashboardActionsProps) {
     } catch {}
     setMounted(true)
 
-    const onDemoChange = () => setDemoMode(localStorage.getItem(DEMO_KEY) === 'true')
+    const onDemoChange = () => {
+      const active = localStorage.getItem(DEMO_KEY) === 'true'
+      setDemoMode(active)
+      if (active) setShowTest(false)
+    }
     window.addEventListener('wi64-demo-change', onDemoChange)
     return () => window.removeEventListener('wi64-demo-change', onDemoChange)
   }, [])
