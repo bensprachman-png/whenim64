@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 }
 import MilestoneTimeline from '@/components/milestone-timeline'
 import DashboardActions from './_components/DashboardActions'
+import { SUPERUSER_EMAIL } from '@/lib/admin'
 import { getFullRetirementAge, fraToString, getRmdAge } from '@/lib/milestones'
 import { computeProjectionYears, projectTaxes, type Sex, type TaxInputs, type IrmaaTargetTier, type FilingStatus } from '@/lib/tax-engine'
 import { getStateInfo } from '@/lib/state-tax'
@@ -253,6 +254,7 @@ export default async function DashboardPage() {
 
   const firstName = session.user.name?.split(' ')[0] ?? 'there'
   const hasScenario = !!scenario
+  const canTest = process.env.NODE_ENV === 'development' || session.user.email === SUPERUSER_EMAIL
 
   // Determine which sections have meaningful plan data
   const hasSS = hasScenario && (scenario.ssPaymentsPerYear > 0 || (scenario.ssStartYear ?? 0) > 0)
@@ -296,6 +298,7 @@ export default async function DashboardPage() {
         stateCode={stateInfo?.code ?? null}
         statePayUrl={statePayUrl}
         hasScenario={hasScenario}
+        canTest={canTest}
       />
 
       {/* Section grid */}
