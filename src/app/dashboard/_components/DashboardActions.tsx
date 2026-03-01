@@ -412,9 +412,10 @@ function generateDemoActions(today: Date): Action[] {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CHECKS_KEY = 'wi64-action-checks'
-const FORCES_KEY = 'wi64-test-forces'
-const DEMO_KEY   = 'wi64-demo-mode'
+const CHECKS_KEY     = 'wi64-action-checks'
+const FORCES_KEY     = 'wi64-test-forces'
+const DEMO_KEY       = 'wi64-demo-mode'
+const TEST_PANEL_KEY = 'wi64-test-panel'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -432,28 +433,21 @@ export default function DashboardActions(props: DashboardActionsProps) {
       const c = localStorage.getItem(CHECKS_KEY)
       const f = localStorage.getItem(FORCES_KEY)
       const d = localStorage.getItem(DEMO_KEY)
+      const t = localStorage.getItem(TEST_PANEL_KEY)
       if (c) setChecked(JSON.parse(c))
       if (f) setTestForces(new Set(JSON.parse(f)))
       if (d === 'true') setDemoMode(true)
+      if (t === 'true') setShowTest(true)
     } catch {}
     setMounted(true)
 
-    const onDemoChange = () => {
-      const active = localStorage.getItem(DEMO_KEY) === 'true'
-      setDemoMode(active)
-    }
-    const onTestToggle = () => {
-      setShowTest(prev => {
-        const next = !prev
-        window.dispatchEvent(new CustomEvent('wi64-test-panel-state', { detail: next }))
-        return next
-      })
-    }
-    window.addEventListener('wi64-demo-change',      onDemoChange)
-    window.addEventListener('wi64-test-panel-toggle', onTestToggle)
+    const onDemoChange  = () => setDemoMode(localStorage.getItem(DEMO_KEY) === 'true')
+    const onTestChange  = () => setShowTest(localStorage.getItem(TEST_PANEL_KEY) === 'true')
+    window.addEventListener('wi64-demo-change',       onDemoChange)
+    window.addEventListener('wi64-test-panel-change', onTestChange)
     return () => {
-      window.removeEventListener('wi64-demo-change',      onDemoChange)
-      window.removeEventListener('wi64-test-panel-toggle', onTestToggle)
+      window.removeEventListener('wi64-demo-change',       onDemoChange)
+      window.removeEventListener('wi64-test-panel-change', onTestChange)
     }
   }, [])
 

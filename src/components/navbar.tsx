@@ -9,7 +9,8 @@ import { CircleHelp, BookOpen, Settings, LogOut, Shield, Camera, FlaskConical } 
 import HelpDialog from './help-dialog'
 import GlossaryDialog from './glossary-dialog'
 
-const DEMO_KEY = 'wi64-demo-mode'
+const DEMO_KEY        = 'wi64-demo-mode'
+const TEST_PANEL_KEY  = 'wi64-test-panel'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard' },
@@ -34,13 +35,14 @@ export default function Navbar() {
 
   useEffect(() => {
     setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
+    setTestPanelOpen(localStorage.getItem(TEST_PANEL_KEY) === 'true')
     const onDemoChange  = () => setDemoActive(localStorage.getItem(DEMO_KEY) === 'true')
-    const onTestState   = (e: Event) => setTestPanelOpen((e as CustomEvent<boolean>).detail)
-    window.addEventListener('wi64-demo-change',    onDemoChange)
-    window.addEventListener('wi64-test-panel-state', onTestState)
+    const onTestChange  = () => setTestPanelOpen(localStorage.getItem(TEST_PANEL_KEY) === 'true')
+    window.addEventListener('wi64-demo-change',       onDemoChange)
+    window.addEventListener('wi64-test-panel-change', onTestChange)
     return () => {
-      window.removeEventListener('wi64-demo-change',    onDemoChange)
-      window.removeEventListener('wi64-test-panel-state', onTestState)
+      window.removeEventListener('wi64-demo-change',       onDemoChange)
+      window.removeEventListener('wi64-test-panel-change', onTestChange)
     }
   }, [])
 
@@ -52,7 +54,13 @@ export default function Navbar() {
     window.dispatchEvent(new Event('wi64-demo-change'))
   }
 
-  const toggleTestPanel = () => window.dispatchEvent(new Event('wi64-test-panel-toggle'))
+  const toggleTestPanel = () => {
+    const next = !testPanelOpen
+    if (next) localStorage.setItem(TEST_PANEL_KEY, 'true')
+    else localStorage.removeItem(TEST_PANEL_KEY)
+    setTestPanelOpen(next)
+    window.dispatchEvent(new Event('wi64-test-panel-change'))
+  }
 
   async function handleSignOut() {
     await signOut()
